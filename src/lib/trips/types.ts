@@ -1,0 +1,70 @@
+// ---------------------------------------------------------------------------
+// Trip types — all shared interfaces live here so both schedule.ts and
+// chatbot.ts can import from a single source of truth, and consuming
+// components only need one import path.
+// ---------------------------------------------------------------------------
+
+export type TripLanding = 'seaforth' | 'fishermans';
+
+export type TripDuration =
+  | '1/2 Day AM'
+  | '1/2 Day PM'
+  | '3/4 Day'
+  | 'Full Day'
+  | 'Overnight'
+  | '1.5 Day'
+  | '2 Day'
+  | '3 Day'
+  | 'Long Range';
+
+export interface ScheduledTrip {
+  id: string;
+  boatName: string;
+  landing: TripLanding;
+  departureDate: string;   // ISO date — '2026-04-03'
+  departureTime: string;   // human-readable — '6:00 AM'
+  duration: TripDuration;
+  durationHours: number;   // numeric for filtering / sorting
+  pricePerPerson: number;
+  maxAnglers: number;
+  spotsLeft: number;
+  description: string;
+  targetSpecies: string[];
+  mmsi?: number;           // links to the fleet tracker
+}
+
+export interface TripFilters {
+  date?: string;        // ISO date string
+  duration?: string;    // matches TripDuration or a loose keyword
+  anglers?: number;     // minimum spots required
+  species?: string;     // keyword — matched against targetSpecies
+}
+
+// ---------------------------------------------------------------------------
+// Chatbot types
+// ---------------------------------------------------------------------------
+
+export type ConversationStep =
+  | 'greeting'
+  | 'ask_date'
+  | 'ask_duration'
+  | 'ask_anglers'
+  | 'ask_species'
+  | 'recommend'
+  | 'followup';
+
+export interface ChatMessage {
+  role: 'bot' | 'user';
+  content: string;
+  timestamp: number;
+  tripResults?: ScheduledTrip[]; // bot can attach matched trips
+}
+
+export interface ConversationState {
+  step: ConversationStep;
+  date: string | null;        // ISO date
+  duration: string | null;    // TripDuration keyword
+  anglers: number | null;
+  species: string | null;
+  messages: ChatMessage[];
+}

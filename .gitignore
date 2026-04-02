@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# superpowers brainstorming
+.superpowers/
+
+# AIS collector data (generated at runtime)
+.ais-positions.json
+
+# Claude config
+.claude/
