@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
+import HeroSection from '@/components/HeroSection';
+import TodaysSummary from '@/components/TodaysSummary';
 import FishingScore from '@/components/FishingScore';
 import ScoreBreakdown from '@/components/ScoreBreakdown';
 import TimelineGraph from '@/components/TimelineGraph';
@@ -113,9 +115,15 @@ export default function Home() {
     ? `${nextTide.type === 'tide_high' ? 'High' : 'Low'} at ${nextTide.hour > 12 ? nextTide.hour - 12 : nextTide.hour}${nextTide.hour >= 12 ? ' PM' : ' AM'}`
     : 'No tide data';
 
+  // Build tide events list for summary
+  const tideEventStrings = allEvents
+    .filter((e) => e.type === 'tide_high' || e.type === 'tide_low')
+    .map((e) => e.label);
+
   return (
     <div className="min-h-screen">
       <Header />
+      <HeroSection />
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-8">
         {/* Location Search */}
@@ -240,6 +248,39 @@ export default function Home() {
                 ))}
               </div>
             </section>
+            {/* Today's Summary */}
+            <TodaysSummary
+              location={dailyScore.location.name}
+              region={dailyScore.location.region}
+              waterTemp={null}
+              bestSpecies={[]}
+              tideEvents={tideEventStrings}
+              moonPhase="New Moon"
+              windCondition="Light westerly winds, 5-10 mph"
+            />
+
+            {/* Windy.com Weather Map */}
+            <section>
+              <h3 className="text-lg font-semibold mb-4 text-[#8899aa] uppercase tracking-wider text-sm">
+                Wind &amp; Weather
+              </h3>
+              <div
+                className="rounded-xl overflow-hidden border border-[#1e2a42]"
+                style={{ height: '450px' }}
+              >
+                <iframe
+                  title="Windy weather map"
+                  width="100%"
+                  height="100%"
+                  src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=imperial&metricTemp=imperial&metricWind=mph&zoom=9&overlay=wind&product=ecmwf&level=surface&lat=32.7&lon=-117.2&marker=true&calendar=now&pressure=true&type=map&menu=&message=true&forecast=12&theme=dark"
+                  frameBorder="0"
+                  style={{ border: 'none' }}
+                />
+              </div>
+              <p className="text-[#8899aa] text-xs mt-2 text-center">
+                Powered by Windy.com &middot; Click to interact with wind, waves, and weather overlay
+              </p>
+            </section>
           </>
         ) : null}
       </main>
@@ -248,7 +289,7 @@ export default function Home() {
       <footer className="mt-auto py-8 text-center text-[#8899aa] text-sm border-t border-[#1e2a42]">
         <p>The Bite Report &middot; Southern California Fishing Intelligence</p>
         <p className="mt-1 text-xs">
-          Data from NOAA, Open-Meteo, NDBC, and public fishing reports
+          Data from NOAA, Open-Meteo, NDBC, Windy.com, and public fishing reports
         </p>
       </footer>
     </div>
