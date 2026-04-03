@@ -130,7 +130,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="mt-auto py-8 text-center text-[#8899aa] text-sm border-t border-[#1e2a42]">
-        <p>The Bite Report &middot; Southern California Fishing Intelligence</p>
+        <p>The Bite Report &middot; Make Memories. Have Fun.</p>
         <p className="mt-1 text-xs">
           Data from NOAA, Open-Meteo, NDBC, Windy.com, and public fishing reports
         </p>

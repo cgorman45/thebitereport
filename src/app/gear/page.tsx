@@ -393,11 +393,8 @@ function TripChecklist() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(storageKey(tripType));
-      if (stored) {
-        setTimeout(() => setChecked(JSON.parse(stored)), 0);
-      } else {
-        setTimeout(() => setChecked({}), 0);
-      }
+      const parsed = stored ? JSON.parse(stored) : {};
+      setTimeout(() => setChecked(parsed), 0);
     } catch {
       setTimeout(() => setChecked({}), 0);
     }
@@ -618,7 +615,7 @@ export default function GearPage() {
         className="w-full py-6 mt-auto text-center text-xs"
         style={{ color: '#8899aa', borderTop: '1px solid #1e2a42' }}
       >
-        The Bite Report &mdash; San Diego Sportfishing
+        The Bite Report &mdash; Make Memories. Have Fun.
       </footer>
     </div>
   );

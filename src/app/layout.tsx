@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'The Bite Report | Southern California Fishing Intelligence',
+  title: 'The Bite Report | Make Memories. Have Fun.',
   description:
-    'Real-time fishing scores, tide data, weather conditions, and catch reports for Southern California ocean fishing. Plan your next trip with data-driven insights.',
+    'Make memories. Have fun. Real-time fishing scores, live fleet tracking, and trip planning for Southern California ocean sportfishing.',
   keywords:
     'fishing, Southern California, fishing report, tide chart, fishing score, SoCal fishing, sportfishing',
 };

@@ -50,11 +50,11 @@ export default function PlanYourTripPage() {
       .then((r) => r.json())
       .then((data: ScheduledTrip[]) => {
         if (Array.isArray(data) && data.length > 0) {
-          setTimeout(() => setLiveTrips(data), 0);
+          setLiveTrips(data);
         }
       })
       .catch(() => {/* use static fallback */})
-      .finally(() => setTimeout(() => setTripsLoading(false), 0));
+      .finally(() => setTripsLoading(false));
     return () => controller.abort();
   }, []);
 
@@ -267,7 +267,7 @@ export default function PlanYourTripPage() {
       </main>
 
       <footer className="mt-8 py-8 text-center text-[#8899aa] text-sm border-t border-[#1e2a42]">
-        <p>The Bite Report &middot; Southern California Fishing Intelligence</p>
+        <p>The Bite Report &middot; Make Memories. Have Fun.</p>
         <p className="mt-1 text-xs">
           Trips depart from San Diego &middot; Seaforth Sportfishing &amp; Fisherman&apos;s Landing
         </p>

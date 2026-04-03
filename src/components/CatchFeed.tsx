@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getLandingName, getLandingColor } from '@/lib/landings';
+import { SPECIES_COLORS, DEFAULT_SPECIES_COLOR } from '@/lib/constants';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,7 +25,7 @@ interface CatchEntry {
 
 // Priority order for primary species display
 // Bluefin & Yellowtail first, then Calico/Barracuda, then Rockfish last
-const SPECIES_PRIORITY: Record<string, number> = {
+const _SPECIES_PRIORITY: Record<string, number> = {
   'Bluefin Tuna': 1,
   'Yellowfin Tuna': 2,
   'Yellowtail': 3,
@@ -81,22 +82,7 @@ const SORTED_DATA = [...CATCH_DATA].sort(
   (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
 );
 
-// ---------------------------------------------------------------------------
-// Species color map
-// ---------------------------------------------------------------------------
-
-const SPECIES_COLORS: Record<string, { bg: string; text: string }> = {
-  'Yellowtail':     { bg: 'rgba(234,179,8,0.15)',   text: '#eab308' },
-  'Bluefin Tuna':   { bg: 'rgba(0,212,255,0.12)',   text: '#00d4ff' },
-  'Yellowfin Tuna': { bg: 'rgba(0,212,255,0.09)',   text: '#38bdf8' },
-  'Calico Bass':    { bg: 'rgba(34,197,94,0.12)',   text: '#22c55e' },
-  'Rockfish':       { bg: 'rgba(249,115,22,0.13)',  text: '#f97316' },
-  'White Seabass':  { bg: 'rgba(168,85,247,0.13)',  text: '#a855f7' },
-  'Barracuda':      { bg: 'rgba(239,68,68,0.12)',   text: '#ef4444' },
-  'Lingcod':        { bg: 'rgba(136,153,170,0.13)', text: '#94a3b8' },
-};
-
-const DEFAULT_SPECIES_COLOR = { bg: 'rgba(136,153,170,0.15)', text: '#8899aa' };
+// Species colors imported from @/lib/constants
 
 // ---------------------------------------------------------------------------
 // Filter tab config

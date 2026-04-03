@@ -113,6 +113,7 @@ export default function LocationPage() {
   const [tripWindow, setTripWindow] = useState<TripWindow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Resolve the location metadata client-side for the header (slug lookup is sync)
   const location = slug ? getLocationBySlug(slug) : undefined;
@@ -154,7 +155,7 @@ export default function LocationPage() {
     }
 
     loadScores();
-  }, [slug]);
+  }, [slug, retryCount]);
 
   // Clear trip window when day changes
   useEffect(() => {
@@ -237,11 +238,7 @@ export default function LocationPage() {
             </p>
             <button
               type="button"
-              onClick={() => {
-                // Re-trigger effect by re-setting slug (same value forces no re-render trick)
-                // Instead we use a state toggle; simplest approach: reload
-                window.location.reload();
-              }}
+              onClick={() => setRetryCount((c) => c + 1)}
               className="inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00d4ff]"
               style={{
                 backgroundColor: '#1e2a42',
@@ -368,7 +365,7 @@ export default function LocationPage() {
           borderTop: '1px solid #1e2a42',
         }}
       >
-        <p>The Bite Report &middot; Southern California Fishing Intelligence</p>
+        <p>The Bite Report &middot; Make Memories. Have Fun.</p>
         <p className="mt-1 text-xs">
           Data from NOAA, Open-Meteo, NDBC, and public fishing reports
         </p>

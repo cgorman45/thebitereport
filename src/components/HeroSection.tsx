@@ -44,7 +44,7 @@ export default function HeroSection() {
             color: '#00d4ff',
           }}
         >
-          SoCal Fishing Intelligence
+          SoCal Sportfishing
         </div>
 
         {/* Main headline */}
@@ -52,8 +52,8 @@ export default function HeroSection() {
           className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight tracking-tight mb-4 max-w-3xl"
           style={{ color: '#ffffff' }}
         >
-          Southern California{' '}
-          <span style={{ color: '#00d4ff' }}>Fishing Intelligence</span>
+          Make Memories.{' '}
+          <span style={{ color: '#00d4ff' }}>Have Fun.</span>
         </h1>
 
         {/* Subheadline */}
@@ -61,7 +61,7 @@ export default function HeroSection() {
           className="text-sm sm:text-base max-w-xl leading-relaxed mb-8"
           style={{ color: '#8899aa' }}
         >
-          Real-time scores, live fleet tracking, and AI-powered trip planning for SoCal anglers
+          Real-time scores, live fleet tracking, and AI-powered trip planning for Southern California anglers
         </p>
 
         {/* Stat badges */}
