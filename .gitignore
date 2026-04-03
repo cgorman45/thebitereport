@@ -46,5 +46,8 @@ next-env.d.ts
 # AIS collector data (generated at runtime)
 .ais-positions.json
 
+# AIS server node_modules
+ais-server/node_modules/
+
 # Claude config
 .claude/
