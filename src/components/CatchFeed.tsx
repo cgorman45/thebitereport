@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getLandingName, getLandingColor } from '@/lib/landings';
 
@@ -320,6 +320,27 @@ function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatN
 export default function CatchFeed() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<LandingFilter>('all');
+  const [liveData, setLiveData] = useState<CatchEntry[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch live data from scraper API
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/catch-reports', { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data: CatchEntry[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setTimeout(() => setLiveData(data), 0);
+        }
+      })
+      .catch(() => {/* use fallback */})
+      .finally(() => setTimeout(() => setLoading(false), 0));
+    return () => controller.abort();
+  }, []);
+
+  // Use live data if available, otherwise fall back to sample
+  const sourceData = liveData || SORTED_DATA;
+  const isLive = liveData !== null && liveData.length > 0;
 
   function handleBookTrip(boatName: string) {
     router.push(`/plan-your-trip?boat=${encodeURIComponent(boatName)}`);
@@ -327,8 +348,8 @@ export default function CatchFeed() {
 
   const filtered =
     activeFilter === 'all'
-      ? SORTED_DATA
-      : SORTED_DATA.filter((e) => e.landing === activeFilter);
+      ? sourceData
+      : sourceData.filter((e) => e.landing === activeFilter);
 
   return (
     <div style={{ width: '100%' }}>
@@ -340,9 +361,9 @@ export default function CatchFeed() {
         <span
           style={{
             fontSize: '10px',
-            color: '#f97316',
-            backgroundColor: '#f9731615',
-            border: '1px solid #f9731633',
+            color: isLive ? '#22c55e' : '#f97316',
+            backgroundColor: isLive ? '#22c55e15' : '#f9731615',
+            border: `1px solid ${isLive ? '#22c55e33' : '#f9731633'}`,
             padding: '2px 8px',
             borderRadius: '9999px',
             fontWeight: 600,
@@ -350,7 +371,7 @@ export default function CatchFeed() {
             letterSpacing: '0.05em',
           }}
         >
-          Sample Data
+          {loading ? 'Loading...' : isLive ? 'Live Data' : 'Sample Data'}
         </span>
       </div>
 
