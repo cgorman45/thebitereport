@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getLandingName, getLandingColor } from '@/lib/landings';
 
 // ---------------------------------------------------------------------------
@@ -367,7 +368,7 @@ function FireIcon() {
   );
 }
 
-function CatchRow({ entry }: { entry: CatchEntry }) {
+function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatName: string) => void }) {
   const landingColor = getLandingColor(entry.landing);
   const landingName  = getLandingName(entry.landing);
   const relDate      = getRelativeDate(entry.date);
@@ -417,8 +418,9 @@ function CatchRow({ entry }: { entry: CatchEntry }) {
           {/* Hot bite icon */}
           {entry.highlight && <FireIcon />}
 
-          {/* Boat name */}
-          <span
+          {/* Boat name — clickable to book trip */}
+          <button
+            onClick={() => onBookTrip(entry.boat)}
             style={{
               fontSize: '14px',
               fontWeight: 700,
@@ -426,10 +428,20 @@ function CatchRow({ entry }: { entry: CatchEntry }) {
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              textDecoration: 'underline',
+              textDecorationColor: '#1e2a42',
+              textUnderlineOffset: '2px',
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#00d4ff'; e.currentTarget.style.textDecorationColor = '#00d4ff'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#e2e8f0'; e.currentTarget.style.textDecorationColor = '#1e2a42'; }}
+            title={`Book a trip on ${entry.boat}`}
           >
             {entry.boat}
-          </span>
+          </button>
 
           {/* Landing pill */}
           <span
@@ -510,7 +522,12 @@ function CatchRow({ entry }: { entry: CatchEntry }) {
 // ---------------------------------------------------------------------------
 
 export default function CatchFeed() {
+  const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<LandingFilter>('all');
+
+  function handleBookTrip(boatName: string) {
+    router.push(`/plan-your-trip?boat=${encodeURIComponent(boatName)}`);
+  }
 
   const filtered =
     activeFilter === 'all'
@@ -578,7 +595,7 @@ export default function CatchFeed() {
             No reports found for this landing.
           </div>
         ) : (
-          filtered.map((entry) => <CatchRow key={entry.id} entry={entry} />)
+          filtered.map((entry) => <CatchRow key={entry.id} entry={entry} onBookTrip={handleBookTrip} />)
         )}
       </div>
     </div>

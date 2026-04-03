@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import TripSearch from '@/components/trip-planner/TripSearch';
 import PriceCalendar from '@/components/trip-planner/PriceCalendar';
@@ -32,6 +32,8 @@ function parseHour(timeStr: string): number {
 
 export default function PlanYourTripPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const boatParam = searchParams.get('boat');
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<string | null>(null);
@@ -41,6 +43,15 @@ export default function PlanYourTripPage() {
 
   const filteredTrips = useMemo(() => {
     let results: ScheduledTrip[] = [...TRIP_SCHEDULE];
+
+    // If a boat name was passed via query param, filter to that boat first
+    if (boatParam) {
+      const boatLower = boatParam.toLowerCase();
+      const boatMatches = results.filter((t) => t.boatName.toLowerCase().includes(boatLower));
+      if (boatMatches.length > 0) {
+        results = boatMatches;
+      }
+    }
 
     if (selectedDate) {
       results = results.filter((t) => t.departureDate === selectedDate);
@@ -145,8 +156,23 @@ export default function PlanYourTripPage() {
             Plan Your <span style={{ color: '#00d4ff' }}>Trip</span>
           </h1>
           <p className="text-sm mt-1" style={{ color: '#8899aa' }}>
-            Find the perfect San Diego sportfishing trip
+            {boatParam
+              ? `Showing trips on the ${boatParam}`
+              : 'Find the perfect San Diego sportfishing trip'}
           </p>
+          {boatParam && (
+            <button
+              onClick={() => router.push('/plan-your-trip')}
+              className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: '#00d4ff18',
+                color: '#00d4ff',
+                border: '1px solid #00d4ff33',
+              }}
+            >
+              Show all trips &times;
+            </button>
+          )}
         </div>
 
         {/* Search bar */}
