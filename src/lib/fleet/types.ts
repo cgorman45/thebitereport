@@ -1,4 +1,4 @@
-export type Landing = 'seaforth' | 'fishermans';
+export type Landing = 'seaforth' | 'fishermans' | 'hm_landing' | 'point_loma' | 'helgrens';
 
 export type BoatStatus =
   | 'catching_fish'

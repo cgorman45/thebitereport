@@ -40,12 +40,15 @@ const STATUS_LABEL_COLOR: Record<BoatStatus, string> = {
   unknown: '#6b7280',
 };
 
-type FilterKey = 'all' | 'seaforth' | 'fishermans' | 'catching_fish' | 'circling';
+type FilterKey = 'all' | 'seaforth' | 'fishermans' | 'hm_landing' | 'point_loma' | 'helgrens' | 'catching_fish' | 'circling';
 
 const FILTER_PILLS: { key: FilterKey; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'seaforth', label: 'Seaforth' },
   { key: 'fishermans', label: "Fisherman's" },
+  { key: 'hm_landing', label: 'H&M Landing' },
+  { key: 'point_loma', label: 'Point Loma' },
+  { key: 'helgrens', label: "Helgren's" },
   { key: 'catching_fish', label: 'Catching Fish' },
   { key: 'circling', label: 'Circling' },
 ];
@@ -112,12 +115,11 @@ function BoatRow({
 }) {
   const dotColor = STATUS_DOT_COLOR[boat.status];
   const labelColor = STATUS_LABEL_COLOR[boat.status];
-  const landingLabel =
-    boat.landing === 'seaforth'
-      ? 'Seaforth'
-      : boat.landing === 'fishermans'
-      ? "Fisherman's"
-      : boat.landing;
+  const LANDING_NAMES: Record<string, string> = {
+    seaforth: 'Seaforth', fishermans: "Fisherman's", hm_landing: 'H&M Landing',
+    point_loma: 'Point Loma', helgrens: "Helgren's",
+  };
+  const landingLabel = LANDING_NAMES[boat.landing] || boat.landing;
 
   return (
     <button

@@ -4,7 +4,7 @@
 // components only need one import path.
 // ---------------------------------------------------------------------------
 
-export type TripLanding = 'seaforth' | 'fishermans';
+export type TripLanding = 'seaforth' | 'fishermans' | 'hm_landing' | 'point_loma' | 'helgrens';
 
 export type TripDuration =
   | '1/2 Day AM'

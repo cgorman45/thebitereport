@@ -1,9 +1,10 @@
 'use client';
 
-import type { ScheduledTrip } from '@/lib/trips/types';
+import type { ScheduledTrip, TripLanding } from '@/lib/trips/types';
+import { getLandingName, getLandingColor } from '@/lib/landings';
 
 export interface FilterState {
-  landings: ('seaforth' | 'fishermans')[];
+  landings: TripLanding[];
   priceRange: 'any' | 'under100' | '100to200' | '200to500' | 'over500';
   species: string[];
   timeOfDay: ('morning' | 'afternoon')[];
@@ -130,7 +131,7 @@ export default function TripFilters({ trips, filters, onFilterChange }: TripFilt
     )
   );
 
-  function toggleLanding(landing: 'seaforth' | 'fishermans') {
+  function toggleLanding(landing: TripLanding) {
     const current = filters.landings;
     const next = current.includes(landing)
       ? current.filter(l => l !== landing)
@@ -200,16 +201,14 @@ export default function TripFilters({ trips, filters, onFilterChange }: TripFilt
       <div className="px-5 py-4" style={{ borderBottom: '1px solid #1e2a42' }}>
         <SectionHeader label="Landing" />
         <div className="flex flex-col gap-2.5">
-          <CustomCheckbox
-            checked={filters.landings.length === 0 || filters.landings.includes('seaforth')}
-            onChange={() => toggleLanding('seaforth')}
-            label="Seaforth"
-          />
-          <CustomCheckbox
-            checked={filters.landings.length === 0 || filters.landings.includes('fishermans')}
-            onChange={() => toggleLanding('fishermans')}
-            label="Fisherman's"
-          />
+          {(['seaforth', 'fishermans', 'hm_landing', 'point_loma', 'helgrens'] as TripLanding[]).map((landing) => (
+            <CustomCheckbox
+              key={landing}
+              checked={filters.landings.length === 0 || filters.landings.includes(landing)}
+              onChange={() => toggleLanding(landing)}
+              label={getLandingName(landing)}
+            />
+          ))}
         </div>
       </div>
 

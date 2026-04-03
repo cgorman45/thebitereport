@@ -13,6 +13,16 @@
 //                      Islander (338312000), Pacific Queen (367438790),
 //                      Excel (367469480), Constitution (367516650),
 //                      Pegasus (367612350)
+//
+// H&M Landing:         Mission Belle, Patriot, Daily Double, Shogun,
+//                      Spirit of Adventure
+//                      2803 Emerson St, San Diego
+//
+// Point Loma Sports.:  Point Loma, New Lo-An, Chubasco II, Premier
+//                      1403 Scott St, San Diego
+//
+// Helgren's Sports.:   Helgren's Oceanside 95, Sea Star
+//                      Oceanside (~45 min north of San Diego)
 // ---------------------------------------------------------------------------
 
 import type { ScheduledTrip, TripFilters } from './types';
@@ -472,6 +482,243 @@ export const TRIP_SCHEDULE: ScheduledTrip[] = [
       "Thursday overnight — depart Thursday night, fish into Friday morning. White seabass on live squid is the primary target along the Coronado Islands kelp edges.",
     targetSpecies: ['white seabass', 'yellowtail', 'calico bass'],
     mmsi: 367438790,
+  },
+
+  // ── H&M LANDING ─────────────────────────────────────────────────────────
+  // 2803 Emerson St, San Diego — Oldest sportfishing operation on the West Coast
+
+  {
+    id: 'hm-mission-belle-0403',
+    boatName: 'Mission Belle',
+    landing: 'hm_landing',
+    departureDate: '2026-04-03',
+    departureTime: '6:00 AM',
+    duration: '1/2 Day AM',
+    durationHours: 5,
+    pricePerPerson: 70,
+    maxAnglers: 60,
+    spotsLeft: 27,
+    description:
+      "Morning half-day aboard H&M's reliable Mission Belle. Works the local kelp beds and structure near Point Loma and the Coronado Islands. Perfect intro trip for families and newer anglers.",
+    targetSpecies: ['calico bass', 'sculpin', 'sheephead', 'rockfish'],
+  },
+  {
+    id: 'hm-patriot-0404',
+    boatName: 'Patriot',
+    landing: 'hm_landing',
+    departureDate: '2026-04-04',
+    departureTime: '6:30 AM',
+    duration: '3/4 Day',
+    durationHours: 8,
+    pricePerPerson: 100,
+    maxAnglers: 55,
+    spotsLeft: 14,
+    description:
+      "H&M's Patriot runs a Saturday 3/4-day to the Coronado Islands and 9 Mile Bank. Yellowtail and white seabass are the primary targets with calico bass as a bonus on the kelp edges.",
+    targetSpecies: ['yellowtail', 'white seabass', 'calico bass', 'rockfish'],
+  },
+  {
+    id: 'hm-daily-double-0405',
+    boatName: 'Daily Double',
+    landing: 'hm_landing',
+    departureDate: '2026-04-05',
+    departureTime: '7:00 AM',
+    duration: 'Full Day',
+    durationHours: 12,
+    pricePerPerson: 145,
+    maxAnglers: 45,
+    spotsLeft: 30,
+    description:
+      "Full-day offshore run aboard the Daily Double. Heading to the Coronado Canyon and 302 Ridge for bluefin and yellowfin tuna. H&M's experienced crew has been putting anglers on fish all spring.",
+    targetSpecies: ['bluefin tuna', 'yellowfin tuna', 'yellowtail', 'dorado'],
+  },
+  {
+    id: 'hm-shogun-0407',
+    boatName: 'Shogun',
+    landing: 'hm_landing',
+    departureDate: '2026-04-07',
+    departureTime: '9:00 PM',
+    duration: '2 Day',
+    durationHours: 48,
+    pricePerPerson: 650,
+    maxAnglers: 28,
+    spotsLeft: 9,
+    description:
+      "Two-day trip aboard the Shogun, one of H&M's storied long-range platforms. Running to the Cortez Bank for bluefin tuna, yellowfin, and dorado on a wide-open offshore run. Bunk and meals included.",
+    targetSpecies: ['bluefin tuna', 'yellowfin tuna', 'dorado', 'yellowtail'],
+  },
+  {
+    id: 'hm-spirit-of-adventure-0409',
+    boatName: 'Spirit of Adventure',
+    landing: 'hm_landing',
+    departureDate: '2026-04-09',
+    departureTime: '8:00 PM',
+    duration: 'Overnight',
+    durationHours: 16,
+    pricePerPerson: 310,
+    maxAnglers: 32,
+    spotsLeft: 18,
+    description:
+      "Thursday overnight aboard the Spirit of Adventure. Departing at dusk and working the Coronado Islands through the night for white seabass on live squid. Back to H&M Landing by early Friday afternoon.",
+    targetSpecies: ['white seabass', 'yellowtail', 'calico bass', 'sheephead'],
+  },
+
+  // ── POINT LOMA SPORTFISHING ──────────────────────────────────────────────
+  // 1403 Scott St, San Diego — Fleet of 16 boats
+
+  {
+    id: 'pl-point-loma-0403',
+    boatName: 'Point Loma',
+    landing: 'point_loma',
+    departureDate: '2026-04-03',
+    departureTime: '6:00 AM',
+    duration: '1/2 Day AM',
+    durationHours: 5,
+    pricePerPerson: 68,
+    maxAnglers: 65,
+    spotsLeft: 38,
+    description:
+      "Friday morning half-day aboard the flagship Point Loma. Works the local kelp beds and reefs just outside the harbor. Great beginner trip — patient crew, gear rental available.",
+    targetSpecies: ['calico bass', 'sculpin', 'sheephead', 'rockfish'],
+  },
+  {
+    id: 'pl-new-lo-an-0404',
+    boatName: 'New Lo-An',
+    landing: 'point_loma',
+    departureDate: '2026-04-04',
+    departureTime: '6:30 AM',
+    duration: '3/4 Day',
+    durationHours: 8,
+    pricePerPerson: 98,
+    maxAnglers: 50,
+    spotsLeft: 22,
+    description:
+      "Saturday 3/4-day aboard the New Lo-An targeting yellowtail and white seabass at the Coronado Islands. Point Loma's fleet has been finding fish consistently — good numbers on the kelp edges.",
+    targetSpecies: ['yellowtail', 'white seabass', 'calico bass', 'lingcod'],
+  },
+  {
+    id: 'pl-chubasco-ii-0406',
+    boatName: 'Chubasco II',
+    landing: 'point_loma',
+    departureDate: '2026-04-06',
+    departureTime: '7:00 AM',
+    duration: 'Full Day',
+    durationHours: 12,
+    pricePerPerson: 155,
+    maxAnglers: 40,
+    spotsLeft: 25,
+    description:
+      "Monday full-day offshore aboard the Chubasco II. Pushing to the 9 Mile Bank and Coronado Ridge for bluefin and yellowfin tuna. Light weekday load means more room on the rail.",
+    targetSpecies: ['bluefin tuna', 'yellowfin tuna', 'yellowtail', 'dorado'],
+  },
+  {
+    id: 'pl-premier-0408',
+    boatName: 'Premier',
+    landing: 'point_loma',
+    departureDate: '2026-04-08',
+    departureTime: '6:00 AM',
+    duration: '3/4 Day',
+    durationHours: 8,
+    pricePerPerson: 95,
+    maxAnglers: 55,
+    spotsLeft: 43,
+    description:
+      "Midweek 3/4-day aboard the Premier. Working Coronado Islands structure and local kelp paddies for yellowtail and calico bass. Calm weather expected — excellent conditions for all skill levels.",
+    targetSpecies: ['yellowtail', 'calico bass', 'white seabass', 'sheephead'],
+  },
+  {
+    id: 'pl-point-loma-0409',
+    boatName: 'Point Loma',
+    landing: 'point_loma',
+    departureDate: '2026-04-09',
+    departureTime: '9:00 PM',
+    duration: 'Overnight',
+    durationHours: 16,
+    pricePerPerson: 275,
+    maxAnglers: 35,
+    spotsLeft: 20,
+    description:
+      "Thursday overnight running the Point Loma to the Coronado Islands for white seabass on live squid and sardines. Fish through the night and return Friday morning with a box full of fillets.",
+    targetSpecies: ['white seabass', 'yellowtail', 'calico bass', 'rockfish'],
+  },
+
+  // ── HELGREN'S SPORTFISHING ───────────────────────────────────────────────
+  // Oceanside, ~45 min north of San Diego — half-day, multi-day, whale watching
+
+  {
+    id: 'hg-oceanside-95-0403',
+    boatName: "Helgren's Oceanside 95",
+    landing: 'helgrens',
+    departureDate: '2026-04-03',
+    departureTime: '6:30 AM',
+    duration: '1/2 Day AM',
+    durationHours: 5,
+    pricePerPerson: 65,
+    maxAnglers: 70,
+    spotsLeft: 34,
+    description:
+      "Half-day out of Oceanside Harbor aboard the spacious Oceanside 95. Targets calico bass, rockfish, and sheephead along the local kelp beds and nearshore structure. A great trip 45 minutes north of San Diego.",
+    targetSpecies: ['calico bass', 'rockfish', 'sheephead', 'sculpin'],
+  },
+  {
+    id: 'hg-sea-star-0405',
+    boatName: 'Sea Star',
+    landing: 'helgrens',
+    departureDate: '2026-04-05',
+    departureTime: '6:00 AM',
+    duration: '3/4 Day',
+    durationHours: 8,
+    pricePerPerson: 92,
+    maxAnglers: 50,
+    spotsLeft: 31,
+    description:
+      "Sunday 3/4-day aboard the Sea Star working the offshore banks north of San Diego. Yellowtail have been showing on the kelp paddies — calico bass and rockfish are reliable backup.",
+    targetSpecies: ['yellowtail', 'calico bass', 'rockfish', 'lingcod'],
+  },
+  {
+    id: 'hg-oceanside-95-0406',
+    boatName: "Helgren's Oceanside 95",
+    landing: 'helgrens',
+    departureDate: '2026-04-06',
+    departureTime: '7:00 AM',
+    duration: 'Full Day',
+    durationHours: 12,
+    pricePerPerson: 135,
+    maxAnglers: 55,
+    spotsLeft: 40,
+    description:
+      "Monday full-day offshore aboard the Oceanside 95. Running to the La Jolla Canyon and 9 Mile Bank for yellowtail and bluefin tuna. Light weekday load — more room and more personal attention from the crew.",
+    targetSpecies: ['yellowtail', 'bluefin tuna', 'yellowfin tuna', 'calico bass'],
+  },
+  {
+    id: 'hg-sea-star-0407',
+    boatName: 'Sea Star',
+    landing: 'helgrens',
+    departureDate: '2026-04-07',
+    departureTime: '8:00 PM',
+    duration: '1.5 Day',
+    durationHours: 30,
+    pricePerPerson: 450,
+    maxAnglers: 24,
+    spotsLeft: 15,
+    description:
+      "1.5-day trip aboard the Sea Star departing Tuesday evening. Fishing through the night and into Wednesday afternoon targeting yellowtail, white seabass, and early-season tuna on the offshore banks. Bunk and galley onboard.",
+    targetSpecies: ['yellowtail', 'white seabass', 'bluefin tuna', 'yellowfin tuna'],
+  },
+  {
+    id: 'hg-oceanside-95-0409',
+    boatName: "Helgren's Oceanside 95",
+    landing: 'helgrens',
+    departureDate: '2026-04-09',
+    departureTime: '6:30 AM',
+    duration: '3/4 Day',
+    durationHours: 8,
+    pricePerPerson: 90,
+    maxAnglers: 60,
+    spotsLeft: 47,
+    description:
+      "End-of-week 3/4-day out of Oceanside. The Oceanside 95 is working the offshore kelp paddies and structure north of the Coronado Islands. White seabass have been active at dawn — bring your iron jigs.",
+    targetSpecies: ['white seabass', 'yellowtail', 'calico bass', 'sheephead'],
   },
 ];
 

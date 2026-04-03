@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { getLandingName, getLandingColor } from '@/lib/landings';
 import type { ScheduledTrip } from '@/lib/trips/types';
 
 interface TripResultsProps {
@@ -52,8 +53,8 @@ function TripResultCard({
   trip: ScheduledTrip;
   onViewOnMap?: (mmsi: number) => void;
 }) {
-  const isSeaforth = trip.landing === 'seaforth';
-  const landingLabel = isSeaforth ? 'Seaforth' : "Fisherman's";
+  const landingLabel = getLandingName(trip.landing);
+  const landingColor = getLandingColor(trip.landing);
   const urgentSpots = trip.spotsLeft < 5;
 
   return (
@@ -82,11 +83,9 @@ function TripResultCard({
         <span
           className="inline-flex items-center self-start text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide"
           style={{
-            backgroundColor: isSeaforth
-              ? 'rgba(0, 212, 255, 0.12)'
-              : 'rgba(249, 115, 22, 0.12)',
-            color: isSeaforth ? '#00d4ff' : '#f97316',
-            border: `1px solid ${isSeaforth ? 'rgba(0, 212, 255, 0.3)' : 'rgba(249, 115, 22, 0.3)'}`,
+            backgroundColor: `${landingColor}1e`,
+            color: landingColor,
+            border: `1px solid ${landingColor}4d`,
           }}
         >
           {landingLabel}
