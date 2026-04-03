@@ -49,17 +49,11 @@ function fishPerAngler(count: number, anglers: number): string {
 
 export default function CatchReportsPanel() {
   const [filter, setFilter] = useState<'all' | 'seaforth' | 'fishermans'>('all');
-  const [reports, setReports] = useState(SAMPLE_REPORTS);
-
-  useEffect(() => {
-    if (filter === 'all') {
-      setReports(SAMPLE_REPORTS);
-    } else if (filter === 'seaforth') {
-      setReports(SAMPLE_REPORTS.filter((r) => r.landing === 'Seaforth'));
-    } else {
-      setReports(SAMPLE_REPORTS.filter((r) => r.landing === "Fisherman's"));
-    }
-  }, [filter]);
+  const reports = filter === 'all'
+    ? SAMPLE_REPORTS
+    : filter === 'seaforth'
+      ? SAMPLE_REPORTS.filter((r) => r.landing === 'Seaforth')
+      : SAMPLE_REPORTS.filter((r) => r.landing === "Fisherman's");
 
   return (
     <div className="p-4">
