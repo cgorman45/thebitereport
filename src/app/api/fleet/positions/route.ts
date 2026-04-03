@@ -34,12 +34,16 @@ async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
     const timer = setTimeout(finish, durationMs + 2000);
 
     ws.onopen = () => {
+      console.log('[AIS] WebSocket opened, sending subscription');
       ws.send(JSON.stringify({
         APIKey: AIS_API_KEY,
         BoundingBoxes: [[[32.0, -118.5], [33.5, -117.0]]],
         FilterMessageTypes: ['PositionReport'],
       }));
-      setTimeout(finish, durationMs);
+      setTimeout(() => {
+        console.log(`[AIS] Collection complete: ${positions.size} vessels`);
+        finish();
+      }, durationMs);
     };
 
     ws.onmessage = (event) => {
@@ -64,8 +68,8 @@ async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
       } catch { /* skip bad messages */ }
     };
 
-    ws.onerror = () => finish();
-    ws.onclose = () => { clearTimeout(timer); finish(); };
+    ws.onerror = (e) => { console.error('[AIS] WebSocket error:', e); finish(); };
+    ws.onclose = (e) => { console.log('[AIS] WebSocket closed:', (e as CloseEvent).code); clearTimeout(timer); finish(); };
   });
 }
 
@@ -80,7 +84,7 @@ export async function GET() {
   }
 
   try {
-    const positions = await collectPositions(4000);
+    const positions = await collectPositions(6000);
     return Response.json({
       connected: true,
       count: positions.length,
