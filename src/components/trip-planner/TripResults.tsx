@@ -81,7 +81,7 @@ function TripResultCard({
 
   return (
     <div
-      className="group flex flex-col md:flex-row gap-4 p-5 rounded-xl transition-all duration-200"
+      className="group rounded-xl transition-all duration-200 p-5"
       style={{
         backgroundColor: '#131b2e',
         border: '1px solid #1e2a42',
@@ -95,6 +95,9 @@ function TripResultCard({
         (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
       }}
     >
+      {/* Main row: 3 columns on desktop */}
+      <div className="flex flex-col md:flex-row gap-4">
+
       {/* ── Left: Boat info ── */}
       <div className="flex-shrink-0 flex flex-col gap-2 md:w-52">
         <h3 className="text-lg font-black leading-tight" style={{ color: '#e2e8f0' }}>
@@ -268,6 +271,8 @@ function TripResultCard({
           )}
         </div>
       </div>
+
+      </div>{/* end main row */}
 
       {/* Fish Processing — inline recommendation */}
       <div
