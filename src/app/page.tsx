@@ -259,28 +259,7 @@ export default function Home() {
               windCondition="Light westerly winds, 5-10 mph"
             />
 
-            {/* Windy.com Weather Map */}
-            <section>
-              <h3 className="text-lg font-semibold mb-4 text-[#8899aa] uppercase tracking-wider text-sm">
-                Wind &amp; Weather
-              </h3>
-              <div
-                className="rounded-xl overflow-hidden border border-[#1e2a42]"
-                style={{ height: '450px' }}
-              >
-                <iframe
-                  title="Windy weather map"
-                  width="100%"
-                  height="100%"
-                  src="https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=imperial&metricTemp=imperial&metricWind=mph&zoom=9&overlay=wind&product=ecmwf&level=surface&lat=32.7&lon=-117.2&marker=true&calendar=now&pressure=true&type=map&menu=&message=true&forecast=12&theme=dark"
-                  frameBorder="0"
-                  style={{ border: 'none' }}
-                />
-              </div>
-              <p className="text-[#8899aa] text-xs mt-2 text-center">
-                Powered by Windy.com &middot; Click to interact with wind, waves, and weather overlay
-              </p>
-            </section>
+            {/* Windy.com moved to side tab — use the fish icon on the right edge */}
           </>
         ) : null}
       </main>
