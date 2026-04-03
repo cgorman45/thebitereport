@@ -58,13 +58,15 @@ export default function PlanYourTripPage() {
     return () => controller.abort();
   }, []);
 
-  // Use live data if available, merge with static private charters
+  // Use live data for scraped landings; keep static schedule for unscraped ones (H&M, Helgren's)
   const allTrips = useMemo(() => {
+    if (!liveTrips?.length) return TRIP_SCHEDULE;
+    const scrapedLandings = new Set(liveTrips.map((t) => t.landing));
+    const staticFallback = TRIP_SCHEDULE.filter(
+      (t) => !scrapedLandings.has(t.landing) && t.charterType !== 'private_charter'
+    );
     const privateCharters = TRIP_SCHEDULE.filter((t) => t.charterType === 'private_charter');
-    if (liveTrips && liveTrips.length > 0) {
-      return [...liveTrips, ...privateCharters];
-    }
-    return TRIP_SCHEDULE;
+    return [...liveTrips, ...staticFallback, ...privateCharters];
   }, [liveTrips]);
 
   const isLiveData = liveTrips !== null && liveTrips.length > 0;
@@ -163,7 +165,7 @@ export default function PlanYourTripPage() {
     }
 
     return results;
-  }, [selectedDate, selectedDuration, anglers, filters]);
+  }, [allTrips, boatParam, selectedDate, selectedDuration, anglers, filters]);
 
   const handleViewOnMap = useCallback(
     (mmsi: number) => {

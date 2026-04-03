@@ -33,6 +33,7 @@ export interface ScheduledTrip {
   description: string;
   targetSpecies: string[];
   mmsi?: number;           // links to the fleet tracker
+  bookingUrl?: string;     // direct deep-link to book this specific trip
   charterType?: CharterType; // 'party_boat' (default) or 'private_charter'
   operator?: string;       // for private charters: operator name
   maxPassengers?: number;  // for private charters: boat capacity (e.g. 6)

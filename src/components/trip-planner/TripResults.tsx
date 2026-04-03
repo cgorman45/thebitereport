@@ -14,16 +14,16 @@ const BOOKING_URLS: Record<string, string> = {
   private_charter: '#', // Private charters book directly with operator
 };
 
-function getBookingUrl(landing: string, boatName: string): string {
-  // Private charters — try to link to operator website
-  if (landing === 'private_charter') {
-    const name = boatName.toLowerCase();
+function getBookingUrl(trip: ScheduledTrip): string {
+  if (trip.bookingUrl) return trip.bookingUrl;
+  if (trip.landing === 'private_charter') {
+    const name = trip.boatName.toLowerCase();
     if (name.includes('clowers')) return 'https://www.captainclowers.com/';
     if (name.includes('boundless')) return 'https://www.boundlessboatcharters.com/';
     if (name.includes('coletta')) return 'https://www.colettasportfishing.com/';
     if (name.includes('ironclad')) return 'https://www.ironcladsportfishing.com/';
   }
-  return BOOKING_URLS[landing] || '#';
+  return BOOKING_URLS[trip.landing] || '#';
 }
 
 interface TripResultsProps {
@@ -245,7 +245,7 @@ function TripResultCard({
         {/* Action buttons */}
         <div className="flex flex-row md:flex-col gap-2 w-full">
           <a
-            href={getBookingUrl(trip.landing, trip.boatName)}
+            href={getBookingUrl(trip)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 md:flex-none text-xs font-bold py-2 px-4 rounded-lg text-center transition-all duration-150 hover:brightness-110 active:scale-95"

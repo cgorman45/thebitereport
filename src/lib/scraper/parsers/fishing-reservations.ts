@@ -19,6 +19,7 @@ export interface LiveTrip {
   description: string;
   targetSpecies: string[];  // inferred from trip type
   status: string;           // 'open' | 'full' | 'definite'
+  bookingUrl: string;       // direct trip booking link, e.g. .../user.php?trip_id=XXXXX
   scrapedAt: string;
 }
 
@@ -29,8 +30,9 @@ export interface LiveTrip {
 const FETCH_TIMEOUT_MS = 10_000;
 
 const RESERVATION_URLS: { url: string; landing: string }[] = [
-  { url: 'https://seaforth.fishingreservations.net/sales/',    landing: 'seaforth'   },
-  { url: 'https://pointloma.fishingreservations.net/sales/',   landing: 'point_loma' },
+  { url: 'https://seaforth.fishingreservations.net/sales/',              landing: 'seaforth'   },
+  { url: 'https://pointloma.fishingreservations.net/sales/',             landing: 'point_loma' },
+  { url: 'https://fishermanslanding.fishingreservations.net/resos/',     landing: 'fishermans' },
 ];
 
 /** Trip types to skip — non-fishing trips */
@@ -164,6 +166,7 @@ async function scrapeReservationPage(
   landing: string,
   scrapedAt: string,
 ): Promise<LiveTrip[]> {
+  const baseUrl = url.replace(/\/$/, '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -187,8 +190,11 @@ async function scrapeReservationPage(
   const $ = cheerio.load(html);
   const trips: LiveTrip[] = [];
 
-  // .scale-data.trip-cell contains the core trip data
-  $('td.scale-data.trip-cell[data-trip-id]').each((_i, el) => {
+  // .scale-data.trip-cell contains the core trip data; fall back to .trip-cell for
+  // sites like fishermanslanding that may not include the scale-data class.
+  const tripCells = $('td.scale-data.trip-cell[data-trip-id]');
+  const selector = tripCells.length > 0 ? 'td.scale-data.trip-cell[data-trip-id]' : 'td.trip-cell[data-trip-id]';
+  $(selector).each((_i, el) => {
     const tripId = $(el).attr('data-trip-id') ?? '';
 
     // Boat name
@@ -244,6 +250,7 @@ async function scrapeReservationPage(
       description,
       targetSpecies: inferTargetSpecies(duration),
       status,
+      bookingUrl: tripId ? `${baseUrl}/user.php?trip_id=${tripId}` : url,
       scrapedAt,
     });
   });
