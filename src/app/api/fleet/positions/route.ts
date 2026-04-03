@@ -1,11 +1,8 @@
-import WebSocket from 'ws';
-
-const AIS_API_KEY = process.env.NEXT_PUBLIC_AISSTREAM_API_KEY || '';
-const AIS_WS_URL = 'wss://stream.aisstream.io/v0/stream';
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 10; // Vercel serverless timeout
+export const maxDuration = 10;
+
+const AIS_API_KEY = process.env.NEXT_PUBLIC_AISSTREAM_API_KEY || '';
 
 interface StoredPosition {
   mmsi: number;
@@ -18,12 +15,13 @@ interface StoredPosition {
   timestamp: number;
 }
 
-// Open a WebSocket to aisstream.io, collect positions for a few seconds, return them.
-// Each poll request gets a fresh snapshot of AIS traffic in the San Diego area.
+// Use native Node.js WebSocket (available in Node 18+) instead of 'ws' library
+// which has masking issues in Vercel's serverless environment
 async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
   return new Promise((resolve) => {
     const positions = new Map<number, StoredPosition>();
-    const ws = new WebSocket(AIS_WS_URL);
+    // Use the global WebSocket (Node.js built-in since v21, polyfilled by Vercel)
+    const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
     let settled = false;
 
     const finish = () => {
@@ -33,23 +31,20 @@ async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
       resolve(Array.from(positions.values()));
     };
 
-    // Safety timeout
     const timer = setTimeout(finish, durationMs + 2000);
 
-    ws.on('open', () => {
+    ws.onopen = () => {
       ws.send(JSON.stringify({
         APIKey: AIS_API_KEY,
         BoundingBoxes: [[[32.0, -118.5], [33.5, -117.0]]],
         FilterMessageTypes: ['PositionReport'],
       }));
-
-      // Collect for durationMs then return
       setTimeout(finish, durationMs);
-    });
+    };
 
-    ws.on('message', (data: WebSocket.Data) => {
+    ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(data.toString());
+        const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
         const report = msg.Message?.PositionReport;
         if (!report) return;
 
@@ -67,10 +62,10 @@ async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
           timestamp: Date.now(),
         });
       } catch { /* skip bad messages */ }
-    });
+    };
 
-    ws.on('error', () => finish());
-    ws.on('close', () => { clearTimeout(timer); finish(); });
+    ws.onerror = () => finish();
+    ws.onclose = () => { clearTimeout(timer); finish(); };
   });
 }
 
@@ -85,20 +80,18 @@ export async function GET() {
   }
 
   try {
-    // Collect AIS positions for 4 seconds
     const positions = await collectPositions(4000);
-
     return Response.json({
       connected: true,
       count: positions.length,
       positions,
     });
-  } catch {
+  } catch (err) {
     return Response.json({
       connected: false,
       count: 0,
       positions: [],
-      error: 'Failed to connect to AIS stream',
+      error: String(err),
     });
   }
 }
