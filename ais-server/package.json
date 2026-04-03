@@ -1,0 +1,13 @@
+{
+  "name": "bite-report-ais-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0"
+  }
+}
