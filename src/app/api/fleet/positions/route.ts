@@ -52,11 +52,20 @@ async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
       }, durationMs);
     });
 
+    let msgCount = 0;
     ws.on('message', (data: Buffer) => {
+      msgCount++;
+      const raw = data.toString();
+      if (msgCount <= 3) {
+        console.log(`[AIS] Message #${msgCount}: ${raw.substring(0, 200)}`);
+      }
       try {
-        const msg = JSON.parse(data.toString());
+        const msg = JSON.parse(raw);
         const report = msg.Message?.PositionReport;
-        if (!report) return;
+        if (!report) {
+          if (msgCount <= 5) console.log(`[AIS] Non-position msg keys: ${Object.keys(msg).join(',')}`);
+          return;
+        }
 
         const mmsi = report.UserID || msg.MetaData?.MMSI;
         if (!mmsi) return;
@@ -79,7 +88,8 @@ async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
       finish();
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code: number, reason: Buffer) => {
+      console.log(`[AIS] Closed: code=${code} reason=${reason.toString()} totalMsgs=${msgCount}`);
       clearTimeout(timer);
       finish();
     });
