@@ -1,100 +1,11 @@
+import { execFile } from 'child_process';
+import { join } from 'path';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 10;
 
 const AIS_API_KEY = process.env.NEXT_PUBLIC_AISSTREAM_API_KEY || '';
-
-interface StoredPosition {
-  mmsi: number;
-  name: string;
-  lat: number;
-  lng: number;
-  sog: number;
-  cog: number;
-  heading: number;
-  timestamp: number;
-}
-
-// Use dynamic import to prevent webpack from bundling ws
-// This avoids the "b.mask is not a function" error on Vercel
-async function getWS() {
-  const mod = await import('ws');
-  return mod.default;
-}
-
-async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
-  const WS = await getWS();
-
-  return new Promise((resolve) => {
-    const positions = new Map<number, StoredPosition>();
-    let settled = false;
-    const ws = new WS('wss://stream.aisstream.io/v0/stream');
-
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      try { ws.close(); } catch { /* ok */ }
-      resolve(Array.from(positions.values()));
-    };
-
-    const timer = setTimeout(finish, durationMs + 2000);
-
-    ws.on('open', () => {
-      console.log('[AIS] Connected to aisstream.io');
-      ws.send(JSON.stringify({
-        APIKey: AIS_API_KEY,
-        BoundingBoxes: [[[32.0, -118.5], [33.5, -117.0]]],
-        FilterMessageTypes: ['PositionReport'],
-      }));
-      setTimeout(() => {
-        console.log(`[AIS] Collected ${positions.size} vessels`);
-        finish();
-      }, durationMs);
-    });
-
-    let msgCount = 0;
-    ws.on('message', (data: Buffer) => {
-      msgCount++;
-      const raw = data.toString();
-      if (msgCount <= 3) {
-        console.log(`[AIS] Message #${msgCount}: ${raw.substring(0, 200)}`);
-      }
-      try {
-        const msg = JSON.parse(raw);
-        const report = msg.Message?.PositionReport;
-        if (!report) {
-          if (msgCount <= 5) console.log(`[AIS] Non-position msg keys: ${Object.keys(msg).join(',')}`);
-          return;
-        }
-
-        const mmsi = report.UserID || msg.MetaData?.MMSI;
-        if (!mmsi) return;
-
-        positions.set(mmsi, {
-          mmsi,
-          name: msg.MetaData?.ShipName?.trim() || `Vessel ${mmsi}`,
-          lat: report.Latitude,
-          lng: report.Longitude,
-          sog: report.Sog / 10,
-          cog: report.Cog / 10,
-          heading: report.TrueHeading === 511 ? report.Cog / 10 : report.TrueHeading,
-          timestamp: Date.now(),
-        });
-      } catch { /* skip */ }
-    });
-
-    ws.on('error', (err: Error) => {
-      console.error('[AIS] Error:', err.message);
-      finish();
-    });
-
-    ws.on('close', (code: number, reason: Buffer) => {
-      console.log(`[AIS] Closed: code=${code} reason=${reason.toString()} totalMsgs=${msgCount}`);
-      clearTimeout(timer);
-      finish();
-    });
-  });
-}
 
 export async function GET() {
   if (!AIS_API_KEY) {
@@ -102,9 +13,35 @@ export async function GET() {
   }
 
   try {
-    const positions = await collectPositions(5000);
-    return Response.json({ connected: true, count: positions.length, positions });
+    const scriptPath = join(process.cwd(), 'scripts', 'ais-snapshot.mjs');
+
+    const result = await new Promise<string>((resolve, reject) => {
+      execFile('node', [scriptPath, AIS_API_KEY, '5000'], {
+        timeout: 9000,
+      }, (error, stdout, stderr) => {
+        if (error && !stdout) {
+          reject(new Error(stderr || error.message));
+        } else {
+          resolve(stdout);
+        }
+      });
+    });
+
+    const data = JSON.parse(result.trim());
+    console.log(`[AIS] Snapshot: ${data.count} vessels collected`);
+
+    return Response.json({
+      connected: true,
+      count: data.count || 0,
+      positions: data.positions || [],
+    });
   } catch (err) {
-    return Response.json({ connected: false, count: 0, positions: [], error: String(err) });
+    console.error('[AIS] Snapshot error:', err);
+    return Response.json({
+      connected: false,
+      count: 0,
+      positions: [],
+      error: String(err),
+    });
   }
 }
