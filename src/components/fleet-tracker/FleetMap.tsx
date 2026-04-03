@@ -243,14 +243,8 @@ export default function FleetMap() {
 
   // Connect to AIS stream directly via client-side WebSocket
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_AISSTREAM_API_KEY;
-    if (!apiKey) {
-      setTimeout(() => setConnectionStatus('no_key'), 0);
-      return;
-    }
-
     const manager = new AISStreamManager({
-      apiKey,
+      apiKey: '',
       knownMmsis: Array.from(KNOWN_MMSIS),
       onMessage: handleAISMessage,
       onStatus: setConnectionStatus,

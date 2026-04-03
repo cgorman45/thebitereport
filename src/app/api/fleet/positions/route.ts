@@ -15,14 +15,20 @@ interface StoredPosition {
   timestamp: number;
 }
 
-// Use native Node.js WebSocket (available in Node 18+) instead of 'ws' library
-// which has masking issues in Vercel's serverless environment
+// Use dynamic import to prevent webpack from bundling ws
+// This avoids the "b.mask is not a function" error on Vercel
+async function getWS() {
+  const mod = await import('ws');
+  return mod.default;
+}
+
 async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
+  const WS = await getWS();
+
   return new Promise((resolve) => {
     const positions = new Map<number, StoredPosition>();
-    // Use the global WebSocket (Node.js built-in since v21, polyfilled by Vercel)
-    const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
     let settled = false;
+    const ws = new WS('wss://stream.aisstream.io/v0/stream');
 
     const finish = () => {
       if (settled) return;
@@ -33,22 +39,22 @@ async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
 
     const timer = setTimeout(finish, durationMs + 2000);
 
-    ws.onopen = () => {
-      console.log('[AIS] WebSocket opened, sending subscription');
+    ws.on('open', () => {
+      console.log('[AIS] Connected to aisstream.io');
       ws.send(JSON.stringify({
         APIKey: AIS_API_KEY,
         BoundingBoxes: [[[32.0, -118.5], [33.5, -117.0]]],
         FilterMessageTypes: ['PositionReport'],
       }));
       setTimeout(() => {
-        console.log(`[AIS] Collection complete: ${positions.size} vessels`);
+        console.log(`[AIS] Collected ${positions.size} vessels`);
         finish();
       }, durationMs);
-    };
+    });
 
-    ws.onmessage = (event) => {
+    ws.on('message', (data: Buffer) => {
       try {
-        const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+        const msg = JSON.parse(data.toString());
         const report = msg.Message?.PositionReport;
         if (!report) return;
 
@@ -65,37 +71,30 @@ async function collectPositions(durationMs: number): Promise<StoredPosition[]> {
           heading: report.TrueHeading === 511 ? report.Cog / 10 : report.TrueHeading,
           timestamp: Date.now(),
         });
-      } catch { /* skip bad messages */ }
-    };
+      } catch { /* skip */ }
+    });
 
-    ws.onerror = (e) => { console.error('[AIS] WebSocket error:', e); finish(); };
-    ws.onclose = (e) => { console.log('[AIS] WebSocket closed:', (e as CloseEvent).code); clearTimeout(timer); finish(); };
+    ws.on('error', (err: Error) => {
+      console.error('[AIS] Error:', err.message);
+      finish();
+    });
+
+    ws.on('close', () => {
+      clearTimeout(timer);
+      finish();
+    });
   });
 }
 
 export async function GET() {
   if (!AIS_API_KEY) {
-    return Response.json({
-      connected: false,
-      count: 0,
-      positions: [],
-      error: 'No AIS API key configured',
-    });
+    return Response.json({ connected: false, count: 0, positions: [], error: 'No API key' });
   }
 
   try {
-    const positions = await collectPositions(6000);
-    return Response.json({
-      connected: true,
-      count: positions.length,
-      positions,
-    });
+    const positions = await collectPositions(5000);
+    return Response.json({ connected: true, count: positions.length, positions });
   } catch (err) {
-    return Response.json({
-      connected: false,
-      count: 0,
-      positions: [],
-      error: String(err),
-    });
+    return Response.json({ connected: false, count: 0, positions: [], error: String(err) });
   }
 }
