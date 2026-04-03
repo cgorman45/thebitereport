@@ -12,6 +12,7 @@ interface CatchEntry {
   id: string;
   boat: string;
   landing: 'seaforth' | 'fishermans' | 'hm_landing' | 'point_loma' | 'helgrens';
+  tripType: string; // '1/2 Day' | '3/4 Day' | 'Full Day' | 'Overnight' | '1.5 Day' | '2 Day' | '3 Day'
   date: string; // ISO date
   species: string;
   count: number;
@@ -24,272 +25,40 @@ interface CatchEntry {
 // Hardcoded catch data — ~25 entries across all 5 landings
 // ---------------------------------------------------------------------------
 
+// NOTE: This is SAMPLE DATA for demonstration purposes.
+// In production, this will be replaced with live data from the catch report scraper.
+// Trip types and counts are matched to realistic boat/landing combinations.
 const CATCH_DATA: CatchEntry[] = [
   // --- Seaforth ---
-  {
-    id: 'sf-01',
-    boat: 'New Seaforth',
-    landing: 'seaforth',
-    date: '2026-04-02',
-    species: 'Yellowtail',
-    count: 48,
-    anglers: 32,
-    area: 'Coronado Islands',
-    highlight: true,
-  },
-  {
-    id: 'sf-02',
-    boat: 'San Diego',
-    landing: 'seaforth',
-    date: '2026-04-02',
-    species: 'Calico Bass',
-    count: 61,
-    anglers: 28,
-    area: 'La Jolla Kelp',
-  },
-  {
-    id: 'sf-03',
-    boat: 'Cortez',
-    landing: 'seaforth',
-    date: '2026-04-01',
-    species: 'Bluefin Tuna',
-    count: 22,
-    anglers: 25,
-    area: '9-Mile Bank',
-    highlight: true,
-  },
-  {
-    id: 'sf-04',
-    boat: 'Apollo',
-    landing: 'seaforth',
-    date: '2026-04-01',
-    species: 'Rockfish',
-    count: 187,
-    anglers: 34,
-    area: 'Point Loma Kelp',
-  },
-  {
-    id: 'sf-05',
-    boat: 'Sea Watch',
-    landing: 'seaforth',
-    date: '2026-04-02',
-    species: 'White Seabass',
-    count: 11,
-    anglers: 18,
-    area: 'Coronado Islands',
-    highlight: true,
-  },
+  { id: 'sf-01', boat: 'New Seaforth', landing: 'seaforth', tripType: '1/2 Day', date: '2026-04-02', species: 'Yellowtail', count: 12, anglers: 32, area: 'Coronado Islands', highlight: true },
+  { id: 'sf-02', boat: 'San Diego', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-02', species: 'Calico Bass', count: 85, anglers: 28, area: 'La Jolla Kelp' },
+  { id: 'sf-03', boat: 'Cortez', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-02', species: 'Bluefin Tuna', count: 8, anglers: 25, area: '9-Mile Bank', highlight: true },
+  { id: 'sf-04', boat: 'Apollo', landing: 'seaforth', tripType: '3/4 Day', date: '2026-04-01', species: 'Rockfish', count: 156, anglers: 34, area: 'Point Loma Kelp' },
+  { id: 'sf-05', boat: 'Sea Watch', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-01', species: 'White Seabass', count: 4, anglers: 22, area: 'Coronado Islands', highlight: true },
   // --- Fisherman's Landing ---
-  {
-    id: 'fl-01',
-    boat: 'Liberty',
-    landing: 'fishermans',
-    date: '2026-04-02',
-    species: 'Bluefin Tuna',
-    count: 34,
-    anglers: 26,
-    area: 'Offshore Bight',
-    highlight: true,
-  },
-  {
-    id: 'fl-02',
-    boat: 'Pacific Queen',
-    landing: 'fishermans',
-    date: '2026-04-02',
-    species: 'Yellowtail',
-    count: 57,
-    anglers: 36,
-    area: 'Coronado Islands',
-    highlight: true,
-  },
-  {
-    id: 'fl-03',
-    boat: 'Excel',
-    landing: 'fishermans',
-    date: '2026-04-01',
-    species: 'Yellowfin Tuna',
-    count: 41,
-    anglers: 22,
-    area: '43-Mile Bank',
-  },
-  {
-    id: 'fl-04',
-    boat: 'Polaris Supreme',
-    landing: 'fishermans',
-    date: '2026-04-01',
-    species: 'Bluefin Tuna',
-    count: 18,
-    anglers: 20,
-    area: 'Offshore Bight',
-  },
-  {
-    id: 'fl-05',
-    boat: 'Fortune',
-    landing: 'fishermans',
-    date: '2026-04-02',
-    species: 'Barracuda',
-    count: 76,
-    anglers: 29,
-    area: 'La Jolla Kelp',
-  },
-  {
-    id: 'fl-06',
-    boat: 'Pacific Queen',
-    landing: 'fishermans',
-    date: '2026-04-01',
-    species: 'Rockfish',
-    count: 142,
-    anglers: 33,
-    area: 'Pt Loma Deep',
-  },
+  { id: 'fl-01', boat: 'Liberty', landing: 'fishermans', tripType: 'Full Day', date: '2026-04-02', species: 'Bluefin Tuna', count: 15, anglers: 26, area: '9-Mile Bank', highlight: true },
+  { id: 'fl-02', boat: 'Pacific Queen', landing: 'fishermans', tripType: 'Overnight', date: '2026-04-02', species: 'Yellowtail', count: 67, anglers: 36, area: 'Coronado Islands', highlight: true },
+  { id: 'fl-03', boat: 'Excel', landing: 'fishermans', tripType: '2.5 Day', date: '2026-04-01', species: 'Yellowfin Tuna', count: 41, anglers: 22, area: '60-Mile Bank' },
+  { id: 'fl-04', boat: 'Polaris Supreme', landing: 'fishermans', tripType: '3 Day', date: '2026-04-01', species: 'Bluefin Tuna', count: 32, anglers: 20, area: 'Tanner Bank', highlight: true },
+  { id: 'fl-05', boat: 'Fortune', landing: 'fishermans', tripType: '3/4 Day', date: '2026-04-02', species: 'Barracuda', count: 48, anglers: 29, area: 'Point Loma Kelp' },
+  { id: 'fl-06', boat: 'Dolphin', landing: 'fishermans', tripType: '1/2 Day', date: '2026-04-01', species: 'Rockfish', count: 95, anglers: 33, area: 'Pt Loma Deep' },
   // --- H&M Landing ---
-  {
-    id: 'hm-01',
-    boat: 'Mission Belle',
-    landing: 'hm_landing',
-    date: '2026-04-02',
-    species: 'Calico Bass',
-    count: 44,
-    anglers: 21,
-    area: 'Mission Bay Kelp',
-  },
-  {
-    id: 'hm-02',
-    boat: 'Patriot',
-    landing: 'hm_landing',
-    date: '2026-04-02',
-    species: 'Yellowtail',
-    count: 39,
-    anglers: 27,
-    area: 'Coronado Islands',
-    highlight: true,
-  },
-  {
-    id: 'hm-03',
-    boat: 'Daily Double',
-    landing: 'hm_landing',
-    date: '2026-04-01',
-    species: 'White Seabass',
-    count: 8,
-    anglers: 14,
-    area: 'La Jolla Kelp',
-    highlight: true,
-  },
-  {
-    id: 'hm-04',
-    boat: 'Mission Belle',
-    landing: 'hm_landing',
-    date: '2026-04-01',
-    species: 'Rockfish',
-    count: 93,
-    anglers: 19,
-    area: 'Point Loma 200ft',
-  },
-  {
-    id: 'hm-05',
-    boat: 'Patriot',
-    landing: 'hm_landing',
-    date: '2026-04-01',
-    species: 'Lingcod',
-    count: 14,
-    anglers: 16,
-    area: 'Pt Loma Deep',
-  },
+  { id: 'hm-01', boat: 'Mission Belle', landing: 'hm_landing', tripType: 'Full Day', date: '2026-04-02', species: 'Calico Bass', count: 62, anglers: 21, area: 'La Jolla Kelp' },
+  { id: 'hm-02', boat: 'Patriot', landing: 'hm_landing', tripType: '3/4 Day', date: '2026-04-02', species: 'Yellowtail', count: 18, anglers: 27, area: 'Coronado Islands', highlight: true },
+  { id: 'hm-03', boat: 'Daily Double', landing: 'hm_landing', tripType: '1/2 Day', date: '2026-04-01', species: 'White Seabass', count: 3, anglers: 14, area: 'La Jolla Kelp', highlight: true },
+  { id: 'hm-04', boat: 'Shogun', landing: 'hm_landing', tripType: '2 Day', date: '2026-04-01', species: 'Yellowfin Tuna', count: 28, anglers: 18, area: '43-Fathom Spot' },
+  { id: 'hm-05', boat: 'Patriot', landing: 'hm_landing', tripType: '3/4 Day', date: '2026-04-01', species: 'Lingcod', count: 11, anglers: 16, area: 'Pt Loma Deep' },
   // --- Point Loma SF ---
-  {
-    id: 'pl-01',
-    boat: 'Point Loma',
-    landing: 'point_loma',
-    date: '2026-04-02',
-    species: 'Yellowtail',
-    count: 52,
-    anglers: 31,
-    area: 'Coronado Islands',
-    highlight: true,
-  },
-  {
-    id: 'pl-02',
-    boat: 'New Lo-An',
-    landing: 'point_loma',
-    date: '2026-04-02',
-    species: 'Bluefin Tuna',
-    count: 27,
-    anglers: 24,
-    area: '9-Mile Bank',
-  },
-  {
-    id: 'pl-03',
-    boat: 'Point Loma',
-    landing: 'point_loma',
-    date: '2026-04-01',
-    species: 'Barracuda',
-    count: 65,
-    anglers: 28,
-    area: 'La Jolla Kelp',
-  },
-  {
-    id: 'pl-04',
-    boat: 'New Lo-An',
-    landing: 'point_loma',
-    date: '2026-04-01',
-    species: 'Rockfish',
-    count: 116,
-    anglers: 22,
-    area: 'Pt Loma Reef',
-  },
+  { id: 'pl-01', boat: 'Point Loma', landing: 'point_loma', tripType: 'Full Day', date: '2026-04-02', species: 'Yellowtail', count: 35, anglers: 31, area: 'Coronado Islands', highlight: true },
+  { id: 'pl-02', boat: 'New Lo-An', landing: 'point_loma', tripType: '3/4 Day', date: '2026-04-02', species: 'Calico Bass', count: 72, anglers: 24, area: 'Point Loma Kelp' },
+  { id: 'pl-03', boat: 'Point Loma', landing: 'point_loma', tripType: 'Full Day', date: '2026-04-01', species: 'Barracuda', count: 44, anglers: 28, area: 'La Jolla Kelp' },
+  { id: 'pl-04', boat: 'Premier', landing: 'point_loma', tripType: '1.5 Day', date: '2026-04-01', species: 'Bluefin Tuna', count: 19, anglers: 18, area: '9-Mile Bank', highlight: true },
   // --- Helgren's ---
-  {
-    id: 'hg-01',
-    boat: 'Oceanside 95',
-    landing: 'helgrens',
-    date: '2026-04-02',
-    species: 'Yellowtail',
-    count: 33,
-    anglers: 20,
-    area: 'Oceanside Kelp',
-    highlight: true,
-  },
-  {
-    id: 'hg-02',
-    boat: 'Sea Star',
-    landing: 'helgrens',
-    date: '2026-04-02',
-    species: 'Calico Bass',
-    count: 58,
-    anglers: 24,
-    area: 'Carlsbad Kelp',
-  },
-  {
-    id: 'hg-03',
-    boat: 'Oceanside 95',
-    landing: 'helgrens',
-    date: '2026-04-01',
-    species: 'Rockfish',
-    count: 201,
-    anglers: 30,
-    area: 'Oceanside Deep',
-  },
-  {
-    id: 'hg-04',
-    boat: 'Sea Star',
-    landing: 'helgrens',
-    date: '2026-04-01',
-    species: 'Lingcod',
-    count: 17,
-    anglers: 18,
-    area: 'Camp Pendleton Reef',
-  },
-  {
-    id: 'hg-05',
-    boat: 'Oceanside 95',
-    landing: 'helgrens',
-    date: '2026-04-02',
-    species: 'White Seabass',
-    count: 9,
-    anglers: 15,
-    area: 'Carlsbad Kelp',
-    highlight: true,
-  },
+  { id: 'hg-01', boat: 'Oceanside 95', landing: 'helgrens', tripType: '3/4 Day', date: '2026-04-02', species: 'Yellowtail', count: 22, anglers: 20, area: 'Oceanside Kelp', highlight: true },
+  { id: 'hg-02', boat: 'Sea Star', landing: 'helgrens', tripType: '1/2 Day', date: '2026-04-02', species: 'Calico Bass', count: 38, anglers: 24, area: 'Carlsbad Kelp' },
+  { id: 'hg-03', boat: 'Oceanside 95', landing: 'helgrens', tripType: 'Full Day', date: '2026-04-01', species: 'Rockfish', count: 145, anglers: 30, area: 'Oceanside Deep' },
+  { id: 'hg-04', boat: 'Sea Star', landing: 'helgrens', tripType: '1/2 Day', date: '2026-04-01', species: 'Lingcod', count: 7, anglers: 18, area: 'Camp Pendleton Reef' },
+  { id: 'hg-05', boat: 'Oceanside 95', landing: 'helgrens', tripType: '3/4 Day', date: '2026-04-02', species: 'White Seabass', count: 5, anglers: 15, area: 'Carlsbad Kelp', highlight: true },
 ];
 
 // Sort newest first
@@ -462,8 +231,10 @@ function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatN
           </span>
         </div>
 
-        {/* Area + stats */}
+        {/* Trip type + area + stats */}
         <p style={{ fontSize: '12px', color: '#8899aa', margin: 0, lineHeight: 1.4 }}>
+          <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{entry.tripType}</span>
+          <span style={{ margin: '0 6px', opacity: 0.4 }}>·</span>
           {entry.area}
           <span style={{ margin: '0 6px', opacity: 0.4 }}>·</span>
           {entry.anglers} anglers
@@ -541,8 +312,20 @@ export default function CatchFeed() {
         <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
           Catch Reports
         </h2>
-        <span style={{ fontSize: '13px', color: '#8899aa' }}>
-          Live fleet feed · Updated hourly
+        <span
+          style={{
+            fontSize: '10px',
+            color: '#f97316',
+            backgroundColor: '#f9731615',
+            border: '1px solid #f9731633',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+        >
+          Sample Data
         </span>
       </div>
 
