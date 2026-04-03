@@ -157,7 +157,11 @@ function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatN
   const landingName  = getLandingName(entry.landing);
   const relDate      = getRelativeDate(entry.date);
   const perRod       = getPerRod(entry.count, entry.anglers);
-  const speciesColor = SPECIES_COLORS[entry.species] ?? DEFAULT_SPECIES_COLOR;
+  // Case-insensitive species color lookup (live data is lowercase, map is capitalized)
+  const speciesKey = Object.keys(SPECIES_COLORS).find(
+    (k) => k.toLowerCase() === entry.species.toLowerCase()
+  );
+  const speciesColor = speciesKey ? SPECIES_COLORS[speciesKey] : DEFAULT_SPECIES_COLOR;
 
   const isToday = relDate === 'Today';
 
