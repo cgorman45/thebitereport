@@ -6,6 +6,7 @@ export const LANDING_DISPLAY_NAMES: Record<string, string> = {
   hm_landing: 'H&M Landing',
   point_loma: 'Point Loma SF',
   helgrens: "Helgren's",
+  private_charter: 'Private Charter',
   unknown: 'Unknown',
 };
 
@@ -15,6 +16,7 @@ export const LANDING_COLORS: Record<string, string> = {
   hm_landing: '#a855f7',
   point_loma: '#22c55e',
   helgrens: '#eab308',
+  private_charter: '#ec4899',
   unknown: '#6b7280',
 };
 

@@ -12,6 +12,8 @@ import { TRIP_SCHEDULE } from '@/lib/trips/schedule';
 import type { ScheduledTrip } from '@/lib/trips/types';
 
 const DEFAULT_FILTERS: FilterState = {
+  charterType: [],
+  durations: [],
   landings: [],
   priceRange: 'any',
   species: [],
@@ -60,6 +62,31 @@ export default function PlanYourTripPage() {
 
     if (anglers > 1) {
       results = results.filter((t) => t.spotsLeft >= anglers);
+    }
+
+    // Charter type filter
+    if (filters.charterType.length > 0) {
+      results = results.filter((t) => {
+        const ct = t.charterType || 'party_boat';
+        return filters.charterType.includes(ct);
+      });
+    }
+
+    // Duration filter
+    if (filters.durations.length > 0) {
+      results = results.filter((t) => {
+        const td = t.duration.toLowerCase();
+        return filters.durations.some((d) => {
+          const dl = d.toLowerCase();
+          if (dl === '1/2 day') return td.includes('1/2');
+          if (dl === '3/4 day') return td.includes('3/4');
+          if (dl === 'full day') return td === 'full day';
+          if (dl === 'overnight') return td === 'overnight';
+          if (dl === 'multi-day') return td.includes('1.5') || td.includes('2 day') || td.includes('3 day');
+          if (dl === 'long range') return td === 'long range';
+          return false;
+        });
+      });
     }
 
     if (filters.landings.length > 0) {
@@ -154,7 +181,7 @@ export default function PlanYourTripPage() {
               <path d="M1 3h14M3 8h10M5 13h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
             {showFilters ? 'Hide Filters' : 'Show Filters'}
-            {(filters.landings.length > 0 || filters.priceRange !== 'any' || filters.species.length > 0 || filters.timeOfDay.length > 0) && (
+            {(filters.charterType.length > 0 || filters.durations.length > 0 || filters.landings.length > 0 || filters.priceRange !== 'any' || filters.species.length > 0 || filters.timeOfDay.length > 0) && (
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#00d4ff' }} />
             )}
           </button>

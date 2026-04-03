@@ -4,6 +4,8 @@ import type { ScheduledTrip, TripLanding } from '@/lib/trips/types';
 import { getLandingName, getLandingColor } from '@/lib/landings';
 
 export interface FilterState {
+  charterType: ('party_boat' | 'private_charter')[];
+  durations: string[];
   landings: TripLanding[];
   priceRange: 'any' | 'under100' | '100to200' | '200to500' | 'over500';
   species: string[];
@@ -157,6 +159,8 @@ export default function TripFilters({ trips, filters, onFilterChange }: TripFilt
 
   function clearAll() {
     onFilterChange({
+      charterType: [],
+      durations: [],
       landings: [],
       priceRange: 'any',
       species: [],
@@ -165,6 +169,8 @@ export default function TripFilters({ trips, filters, onFilterChange }: TripFilt
   }
 
   const hasActiveFilters =
+    filters.charterType.length > 0 ||
+    filters.durations.length > 0 ||
     filters.landings.length > 0 ||
     filters.priceRange !== 'any' ||
     filters.species.length > 0 ||
@@ -197,11 +203,58 @@ export default function TripFilters({ trips, filters, onFilterChange }: TripFilt
         )}
       </div>
 
-      {/* ── Section 1: Landing ── */}
+      {/* ── Section 1: Trip Duration ── */}
+      <div className="px-5 py-4" style={{ borderBottom: '1px solid #1e2a42' }}>
+        <SectionHeader label="Trip Duration" />
+        <div className="flex flex-col gap-2.5">
+          {['1/2 Day', '3/4 Day', 'Full Day', 'Overnight', 'Multi-Day', 'Long Range'].map((dur) => (
+            <CustomCheckbox
+              key={dur}
+              checked={filters.durations.length === 0 || filters.durations.includes(dur)}
+              onChange={() => {
+                const durations = filters.durations.includes(dur)
+                  ? filters.durations.filter((d) => d !== dur)
+                  : [...filters.durations, dur];
+                onFilterChange({ ...filters, durations });
+              }}
+              label={dur}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Section 2: Charter Type ── */}
+      <div className="px-5 py-4" style={{ borderBottom: '1px solid #1e2a42' }}>
+        <SectionHeader label="Charter Type" />
+        <div className="flex flex-col gap-2.5">
+          <CustomCheckbox
+            checked={filters.charterType.length === 0 || filters.charterType.includes('party_boat')}
+            onChange={() => {
+              const ct = filters.charterType.includes('party_boat')
+                ? filters.charterType.filter((c) => c !== 'party_boat')
+                : [...filters.charterType, 'party_boat'] as ('party_boat' | 'private_charter')[];
+              onFilterChange({ ...filters, charterType: ct });
+            }}
+            label="Party Boats"
+          />
+          <CustomCheckbox
+            checked={filters.charterType.length === 0 || filters.charterType.includes('private_charter')}
+            onChange={() => {
+              const ct = filters.charterType.includes('private_charter')
+                ? filters.charterType.filter((c) => c !== 'private_charter')
+                : [...filters.charterType, 'private_charter'] as ('party_boat' | 'private_charter')[];
+              onFilterChange({ ...filters, charterType: ct });
+            }}
+            label="Private Charters (6-pack)"
+          />
+        </div>
+      </div>
+
+      {/* ── Section 3: Landing ── */}
       <div className="px-5 py-4" style={{ borderBottom: '1px solid #1e2a42' }}>
         <SectionHeader label="Landing" />
         <div className="flex flex-col gap-2.5">
-          {(['seaforth', 'fishermans', 'hm_landing', 'point_loma', 'helgrens'] as TripLanding[]).map((landing) => (
+          {(['seaforth', 'fishermans', 'hm_landing', 'point_loma', 'helgrens', 'private_charter'] as TripLanding[]).map((landing) => (
             <CustomCheckbox
               key={landing}
               checked={filters.landings.length === 0 || filters.landings.includes(landing)}

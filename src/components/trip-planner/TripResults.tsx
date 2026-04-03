@@ -80,16 +80,30 @@ function TripResultCard({
         </h3>
 
         {/* Landing badge */}
-        <span
-          className="inline-flex items-center self-start text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide"
-          style={{
-            backgroundColor: `${landingColor}1e`,
-            color: landingColor,
-            border: `1px solid ${landingColor}4d`,
-          }}
-        >
-          {landingLabel}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide"
+            style={{
+              backgroundColor: `${landingColor}1e`,
+              color: landingColor,
+              border: `1px solid ${landingColor}4d`,
+            }}
+          >
+            {landingLabel}
+          </span>
+          {trip.charterType === 'private_charter' && (
+            <span
+              className="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wide"
+              style={{
+                backgroundColor: '#ec489922',
+                color: '#ec4899',
+                border: '1px solid #ec48994d',
+              }}
+            >
+              Private 6-Pack
+            </span>
+          )}
+        </div>
 
         {/* Date + time */}
         <div className="flex flex-col gap-1">
@@ -176,13 +190,20 @@ function TripResultCard({
       {/* ── Right: Price + spots + actions ── */}
       <div className="flex flex-col items-start md:items-end gap-3 md:w-44 shrink-0">
         {/* Price */}
-        <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-black" style={{ color: '#00d4ff' }}>
-            ${trip.pricePerPerson}
-          </span>
-          <span className="text-xs" style={{ color: '#8899aa' }}>
-            / person
-          </span>
+        <div className="flex flex-col items-start md:items-end">
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-black" style={{ color: '#00d4ff' }}>
+              ${trip.pricePerPerson}
+            </span>
+            <span className="text-xs" style={{ color: '#8899aa' }}>
+              / person
+            </span>
+          </div>
+          {trip.privateBoatRate && (
+            <span className="text-[10px] mt-0.5" style={{ color: '#8899aa' }}>
+              ${trip.privateBoatRate.toLocaleString()} whole boat
+            </span>
+          )}
         </div>
 
         {/* Spots indicator */}

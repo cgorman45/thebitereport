@@ -4,7 +4,9 @@
 // components only need one import path.
 // ---------------------------------------------------------------------------
 
-export type TripLanding = 'seaforth' | 'fishermans' | 'hm_landing' | 'point_loma' | 'helgrens';
+export type TripLanding = 'seaforth' | 'fishermans' | 'hm_landing' | 'point_loma' | 'helgrens' | 'private_charter';
+
+export type CharterType = 'party_boat' | 'private_charter';
 
 export type TripDuration =
   | '1/2 Day AM'
@@ -31,6 +33,10 @@ export interface ScheduledTrip {
   description: string;
   targetSpecies: string[];
   mmsi?: number;           // links to the fleet tracker
+  charterType?: CharterType; // 'party_boat' (default) or 'private_charter'
+  operator?: string;       // for private charters: operator name
+  maxPassengers?: number;  // for private charters: boat capacity (e.g. 6)
+  privateBoatRate?: number; // for private charters: flat rate for the whole boat
 }
 
 export interface TripFilters {
