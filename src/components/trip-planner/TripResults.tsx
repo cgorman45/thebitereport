@@ -4,6 +4,28 @@ import { useState } from 'react';
 import { getLandingName, getLandingColor } from '@/lib/landings';
 import type { ScheduledTrip } from '@/lib/trips/types';
 
+// Booking URLs for each landing
+const BOOKING_URLS: Record<string, string> = {
+  seaforth: 'https://seaforthlanding.com/schedule',
+  fishermans: 'https://fishermanslanding.com/schedule',
+  hm_landing: 'https://www.hmlanding.com/book-a-trip/',
+  point_loma: 'https://pointloma.fishingreservations.net/sales/',
+  helgrens: 'https://helgrensportfishing.com/',
+  private_charter: '#', // Private charters book directly with operator
+};
+
+function getBookingUrl(landing: string, boatName: string): string {
+  // Private charters — try to link to operator website
+  if (landing === 'private_charter') {
+    const name = boatName.toLowerCase();
+    if (name.includes('clowers')) return 'https://www.captainclowers.com/';
+    if (name.includes('boundless')) return 'https://www.boundlessboatcharters.com/';
+    if (name.includes('coletta')) return 'https://www.colettasportfishing.com/';
+    if (name.includes('ironclad')) return 'https://www.ironcladsportfishing.com/';
+  }
+  return BOOKING_URLS[landing] || '#';
+}
+
 interface TripResultsProps {
   trips: ScheduledTrip[];
   onViewOnMap?: (mmsi: number) => void;
@@ -220,7 +242,9 @@ function TripResultCard({
         {/* Action buttons */}
         <div className="flex flex-row md:flex-col gap-2 w-full">
           <a
-            href="#"
+            href={getBookingUrl(trip.landing, trip.boatName)}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex-1 md:flex-none text-xs font-bold py-2 px-4 rounded-lg text-center transition-all duration-150 hover:brightness-110 active:scale-95"
             style={{
               backgroundColor: '#00d4ff',
