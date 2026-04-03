@@ -130,14 +130,13 @@ export default function TripPlanner({ tripWindow, onClear }: TripPlannerProps) {
   // Animate in when tripWindow becomes non-null
   useEffect(() => {
     if (tripWindow) {
-      setRendered(true);
-      // Small delay so CSS transition fires
-      const id = setTimeout(() => setVisible(true), 20);
-      return () => clearTimeout(id);
+      const id1 = setTimeout(() => setRendered(true), 0);
+      const id2 = setTimeout(() => setVisible(true), 20);
+      return () => { clearTimeout(id1); clearTimeout(id2); };
     } else {
-      setVisible(false);
-      const id = setTimeout(() => setRendered(false), 300);
-      return () => clearTimeout(id);
+      const id1 = setTimeout(() => setVisible(false), 0);
+      const id2 = setTimeout(() => setRendered(false), 300);
+      return () => { clearTimeout(id1); clearTimeout(id2); };
     }
   }, [tripWindow]);
 

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { AISStreamManager } from '@/lib/fleet/ais';
-import { FLEET_ROSTER, KNOWN_MMSIS, getFleetBoat } from '@/lib/fleet/boats';
+import { KNOWN_MMSIS, getFleetBoat } from '@/lib/fleet/boats';
 import { classifyBoatStatus, pruneHistory } from '@/lib/fleet/fishing-detection';
 import Sidebar from './Sidebar';
 import MapLegend from './MapLegend';
@@ -98,7 +98,6 @@ export default function FleetMap() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<Map<number, L.Marker>>(new Map());
-  const trackLinesRef = useRef<Map<number, L.Polyline[]>>(new Map());
 
   const [boats, setBoats] = useState<Map<number, TrackedBoat>>(new Map());
   const [connectionStatus, setConnectionStatus] = useState<string>('disconnected');
@@ -108,76 +107,6 @@ export default function FleetMap() {
 
   // Ref to hold mutable boats state for the WebSocket callback
   const boatsRef = useRef<Map<number, TrackedBoat>>(new Map());
-
-  // Process incoming AIS message
-  const handleAISMessage = useCallback((msg: AISMessage) => {
-    const report = msg.Message.PositionReport;
-    if (!report) return;
-
-    const mmsi = report.UserID || msg.MetaData.MMSI;
-    const lat = report.Latitude;
-    const lng = report.Longitude;
-    // aisstream.io sends raw AIS values: SOG in 1/10 knot, COG in 1/10 degree
-    const speed = report.Sog / 10;
-    const heading = report.TrueHeading === 511 ? report.Cog / 10 : report.TrueHeading;
-    const cog = report.Cog / 10;
-    const now = Date.now();
-
-    // Skip invalid positions
-    if (lat === 0 && lng === 0) return;
-    if (lat < 30 || lat > 35 || lng < -120 || lng > -115) return;
-
-    // Match against fleet or accept fishing vessels
-    const fleetBoat = getFleetBoat(mmsi);
-    const isKnown = KNOWN_MMSIS.has(mmsi);
-
-    if (!isKnown) {
-      // Geographic fallback: accept any vessel in the San Diego bounding box
-      // aisstream filters by the subscription bounding box already,
-      // so all messages here are within our area of interest
-      // We still show them to demonstrate the live connection
-    }
-
-    const currentBoats = boatsRef.current;
-    const existing = currentBoats.get(mmsi);
-
-    // Build position entry
-    const entry: PositionEntry = { lat, lng, speed, heading: heading || cog, timestamp: now };
-
-    // Update or create tracked boat
-    const history = pruneHistory(
-      existing ? [...existing.history, entry] : [entry],
-      now
-    );
-
-    const { status, label, detail } = classifyBoatStatus(lat, lng, speed, history, now);
-
-    const tracked: TrackedBoat = {
-      mmsi,
-      name: fleetBoat?.name || existing?.name || msg.MetaData.ShipName?.trim() || `Vessel ${mmsi}`,
-      landing: fleetBoat?.landing || existing?.landing || 'unknown',
-      vesselType: fleetBoat?.vesselType || existing?.vesselType,
-      lat,
-      lng,
-      speed,
-      heading: heading || cog,
-      lastUpdate: now,
-      status,
-      statusLabel: label,
-      statusDetail: detail,
-      history,
-    };
-
-    const newBoats = new Map(currentBoats);
-    newBoats.set(mmsi, tracked);
-    boatsRef.current = newBoats;
-
-    setBoats(newBoats);
-    setLastUpdate(now);
-
-    // Update Leaflet marker
-    updateMarker(tracked);
-  }, []);
 
   // Update or create a Leaflet marker for a boat
   const updateMarker = useCallback((boat: TrackedBoat) => {
@@ -225,6 +154,61 @@ export default function FleetMap() {
       markersRef.current.set(boat.mmsi, marker);
     }
   }, []);
+
+  // Process incoming AIS message
+  const handleAISMessage = useCallback((msg: AISMessage) => {
+    const report = msg.Message.PositionReport;
+    if (!report) return;
+
+    const mmsi = report.UserID || msg.MetaData.MMSI;
+    const lat = report.Latitude;
+    const lng = report.Longitude;
+    const speed = report.Sog / 10;
+    const heading = report.TrueHeading === 511 ? report.Cog / 10 : report.TrueHeading;
+    const cog = report.Cog / 10;
+    const now = Date.now();
+
+    if (lat === 0 && lng === 0) return;
+    if (lat < 30 || lat > 35 || lng < -120 || lng > -115) return;
+
+    const fleetBoat = getFleetBoat(mmsi);
+
+    const currentBoats = boatsRef.current;
+    const existing = currentBoats.get(mmsi);
+
+    const entry: PositionEntry = { lat, lng, speed, heading: heading || cog, timestamp: now };
+
+    const history = pruneHistory(
+      existing ? [...existing.history, entry] : [entry],
+      now
+    );
+
+    const { status, label, detail } = classifyBoatStatus(lat, lng, speed, history, now);
+
+    const tracked: TrackedBoat = {
+      mmsi,
+      name: fleetBoat?.name || existing?.name || msg.MetaData.ShipName?.trim() || `Vessel ${mmsi}`,
+      landing: fleetBoat?.landing || existing?.landing || 'unknown',
+      vesselType: fleetBoat?.vesselType || existing?.vesselType,
+      lat,
+      lng,
+      speed,
+      heading: heading || cog,
+      lastUpdate: now,
+      status,
+      statusLabel: label,
+      statusDetail: detail,
+      history,
+    };
+
+    const newBoats = new Map(currentBoats);
+    newBoats.set(mmsi, tracked);
+    boatsRef.current = newBoats;
+
+    setBoats(newBoats);
+    setLastUpdate(now);
+    updateMarker(tracked);
+  }, [updateMarker]);
 
   // Initialize map
   useEffect(() => {

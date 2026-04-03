@@ -15,14 +15,11 @@ export async function GET() {
   }
 
   const encoder = new TextEncoder();
-  let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
   let ws: WebSocket | null = null;
   let closed = false;
 
   const readable = new ReadableStream<Uint8Array>({
     start(controller) {
-      streamController = controller;
-
       ws = new WebSocket(AIS_WS_URL);
 
       ws.on('open', () => {

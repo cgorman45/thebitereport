@@ -2,16 +2,7 @@ import type { TideData } from '@/types';
 
 const BASE_URL = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
 
-/**
- * Formats a Date object as YYYYMMDD — the format NOAA's API expects for
- * begin_date / end_date parameters.
- */
-function _formatNoaaDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}${m}${d}`;
-}
+
 
 /**
  * Builds the query URL for NOAA's Tides & Currents predictions endpoint.
