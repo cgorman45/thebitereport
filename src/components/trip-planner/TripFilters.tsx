@@ -1,7 +1,7 @@
 'use client';
 
 import type { ScheduledTrip, TripLanding } from '@/lib/trips/types';
-import { getLandingName, getLandingColor } from '@/lib/landings';
+import { getLandingName } from '@/lib/landings';
 
 export interface FilterState {
   charterType: ('party_boat' | 'private_charter')[];

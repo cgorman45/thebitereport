@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 // Simulated recent catch reports — in production these come from the scraper
 const SAMPLE_REPORTS = [

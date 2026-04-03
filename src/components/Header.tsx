@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { href: '/', label: 'Fishing Score' },
   { href: '/fleet-tracker', label: 'Live Fleet Map' },
   { href: '/plan-your-trip', label: 'Plan Your Trip' },
+  { href: '/gear', label: 'Gear' },
 ];
 
 export default function Header() {
