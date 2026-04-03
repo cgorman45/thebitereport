@@ -78,7 +78,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
-// Card 1 — What's Biting
+// Card 1 — What&apos;s Biting
 // ---------------------------------------------------------------------------
 
 function WhatsBiting({ speciesOverride }: { speciesOverride: string[] }) {
@@ -93,7 +93,7 @@ function WhatsBiting({ speciesOverride }: { speciesOverride: string[] }) {
       className="rounded-xl p-5 col-span-2"
       style={{ backgroundColor: '#131b2e', border: '1px solid #1e2a42' }}
     >
-      <SectionLabel>What's Biting</SectionLabel>
+      <SectionLabel>What&apos;s Biting</SectionLabel>
 
       <div className="flex flex-wrap gap-2 mb-4">
         {displaySpecies.map((species) => {
@@ -389,7 +389,7 @@ export default function TodaysSummary({
       {/* Section header */}
       <div className="flex items-baseline gap-3 mb-5">
         <h2 className="text-lg font-bold" style={{ color: '#e2e8f0' }}>
-          Today's Fishing Summary
+          Today&apos;s Fishing Summary
         </h2>
         {(location || region) && (
           <span className="text-sm" style={{ color: '#8899aa' }}>
@@ -402,7 +402,7 @@ export default function TodaysSummary({
         Grid layout:
         - Mobile: 1 column, cards stacked
         - Desktop (sm+): 2 columns
-        "What's Biting" and "Pro Tip" each span 2 columns (col-span-2).
+        "What&apos;s Biting" and "Pro Tip" each span 2 columns (col-span-2).
       */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <WhatsBiting speciesOverride={bestSpecies} />
