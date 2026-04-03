@@ -241,10 +241,16 @@ export default function FleetMap() {
     };
   }, []);
 
-  // Connect to AIS stream via SSE proxy
+  // Connect to AIS stream directly via client-side WebSocket
   useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_AISSTREAM_API_KEY;
+    if (!apiKey) {
+      setConnectionStatus('no_key');
+      return;
+    }
+
     const manager = new AISStreamManager({
-      apiKey: '', // API key is now server-side in the SSE proxy
+      apiKey,
       knownMmsis: Array.from(KNOWN_MMSIS),
       onMessage: handleAISMessage,
       onStatus: setConnectionStatus,
