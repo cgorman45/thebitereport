@@ -5,8 +5,9 @@ import { usePathname } from 'next/navigation';
 
 const NAV_LINKS = [
   { href: '/', label: 'Fishing Score' },
-  { href: '/fleet-tracker', label: 'Live Fleet Map' },
-  { href: '/plan-your-trip', label: 'Plan Your Trip' },
+  { href: '/fleet-tracker', label: 'Fleet Map' },
+  { href: '/plan-your-trip', label: 'Plan Trip' },
+  { href: '/weather', label: 'Weather' },
   { href: '/gear', label: 'Gear' },
 ];
 
