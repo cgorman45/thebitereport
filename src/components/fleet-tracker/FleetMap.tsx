@@ -245,7 +245,7 @@ export default function FleetMap() {
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_AISSTREAM_API_KEY;
     if (!apiKey) {
-      setConnectionStatus('no_key');
+      setTimeout(() => setConnectionStatus('no_key'), 0);
       return;
     }
 
