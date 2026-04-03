@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const NAV_LINKS = [
-  { href: '/', label: 'Fishing Score' },
+  { href: '/', label: 'Bite Report' },
   { href: '/fleet-tracker', label: 'Fleet Map' },
   { href: '/plan-your-trip', label: 'Plan Trip' },
   { href: '/weather', label: 'Weather' },

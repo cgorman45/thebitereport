@@ -41,11 +41,11 @@ const SPECIES_PRIORITY: string[] = [
 ];
 
 const LANDING_URLS: { url: string; landing: string }[] = [
-  { url: 'https://www.976-tuna.com/landing/4/seaforth/counts',                landing: 'seaforth'    },
-  { url: 'https://www.976-tuna.com/landing/3/fishermans-landing/counts',      landing: 'fishermans'  },
-  { url: 'https://www.976-tuna.com/landing/17/h-m-landing/counts',            landing: 'hm_landing'  },
-  { url: 'https://www.976-tuna.com/landing/32/point-loma-sportfishing/counts',landing: 'point_loma'  },
-  { url: 'https://www.976-tuna.com/landing/16/helgrens-sportfishing/counts',  landing: 'helgrens'    },
+  { url: 'https://www.976-tuna.com/landing/1/point-loma/counts',          landing: 'point_loma'  },
+  { url: 'https://www.976-tuna.com/landing/2/fishermans/counts',          landing: 'fishermans'  },
+  { url: 'https://www.976-tuna.com/landing/3/hm-landing/counts',          landing: 'hm_landing'  },
+  { url: 'https://www.976-tuna.com/landing/4/seaforth/counts',            landing: 'seaforth'    },
+  { url: 'https://www.976-tuna.com/landing/16/helgrens-sportfishing/counts', landing: 'helgrens'  },
 ];
 
 // ---------------------------------------------------------------------------
