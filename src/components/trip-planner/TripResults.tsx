@@ -244,6 +244,45 @@ function TripResultCard({
           )}
         </div>
       </div>
+
+      {/* Fish Processing — inline recommendation */}
+      <div
+        className="w-full mt-3 pt-3 flex flex-col sm:flex-row sm:items-center gap-2"
+        style={{ borderTop: '1px solid #1e2a4266' }}
+      >
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8899aa" strokeWidth="2" strokeLinecap="round">
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+          <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: '#8899aa' }}>
+            Fish Processing
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="https://www.fivestar.net"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] px-2.5 py-1 rounded-full font-medium transition-all hover:brightness-125"
+            style={{ backgroundColor: '#22c55e18', color: '#22c55e', border: '1px solid #22c55e33' }}
+          >
+            5 Star Fish Processing
+          </a>
+          <a
+            href="https://www.fishermansprocessing.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] px-2.5 py-1 rounded-full font-medium transition-all hover:brightness-125"
+            style={{ backgroundColor: '#00d4ff18', color: '#00d4ff', border: '1px solid #00d4ff33' }}
+          >
+            Fisherman&apos;s Processing
+          </a>
+        </div>
+        <span className="text-[10px]" style={{ color: '#8899aa' }}>
+          Reserve your fillet service before your trip
+        </span>
+      </div>
     </div>
   );
 }
