@@ -6,7 +6,7 @@ const BASE_URL = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter';
  * Formats a Date object as YYYYMMDD — the format NOAA's API expects for
  * begin_date / end_date parameters.
  */
-function formatNoaaDate(date: Date): string {
+function _formatNoaaDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');

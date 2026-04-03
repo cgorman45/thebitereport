@@ -349,6 +349,7 @@ function buildRecommendationMessage(
 // Intent detection helpers
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function isAffirmative(input: string): boolean {
   return /\b(yes|yeah|yep|yup|sure|sounds good|perfect|great|ok|okay|absolutely|definitely|correct|that.?s right)\b/i.test(input);
 }

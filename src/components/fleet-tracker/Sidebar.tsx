@@ -177,7 +177,6 @@ export default function Sidebar({
 
   // Tick every second to keep relative time fresh
   useEffect(() => {
-    setRelativeTime(getRelativeSeconds(lastUpdate));
     const id = setInterval(() => {
       setRelativeTime(getRelativeSeconds(lastUpdate));
     }, 1000);
