@@ -2,22 +2,31 @@
 
 export default function HeroSection() {
   return (
-    <div className="relative w-full overflow-hidden" style={{ minHeight: '300px' }}>
-      {/* Ocean gradient background */}
+    <div className="relative w-full overflow-hidden" style={{ minHeight: '340px' }}>
+      {/* Ocean photo background */}
       <div
         className="absolute inset-0"
         style={{
-          background: 'linear-gradient(180deg, #0a1628 0%, #0d1a35 40%, #0a1220 75%, #0a0f1a 100%)',
+          backgroundImage: 'url(https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1920&q=80)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center 60%',
         }}
       />
 
-      {/* Subtle depth layers — diagonal tinted bands */}
+      {/* Dark overlay for readability */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(180deg, rgba(10,15,26,0.75) 0%, rgba(10,15,26,0.6) 40%, rgba(10,15,26,0.85) 80%, #0a0f1a 100%)',
+        }}
+      />
+
+      {/* Subtle cyan glow */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 80% 60% at 50% 120%, rgba(0,212,255,0.06) 0%, transparent 70%), ' +
-            'radial-gradient(ellipse 60% 40% at 20% 0%, rgba(0,100,160,0.08) 0%, transparent 60%)',
+            'radial-gradient(ellipse 80% 60% at 50% 120%, rgba(0,212,255,0.08) 0%, transparent 70%)',
         }}
       />
 
