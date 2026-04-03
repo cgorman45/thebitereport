@@ -37,9 +37,9 @@ export class AISStreamManager {
   connect(): void {
     if (this.destroyed) return;
 
-    // Poll every 5 seconds
+    // Poll every 15 seconds (each request takes ~4s to collect AIS data)
     this.poll();
-    this.pollTimer = setInterval(() => this.poll(), 5000);
+    this.pollTimer = setInterval(() => this.poll(), 15000);
   }
 
   private async poll(): Promise<void> {
