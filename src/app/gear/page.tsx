@@ -399,7 +399,7 @@ function TripChecklist() {
         setTimeout(() => setChecked({}), 0);
       }
     } catch {
-      setChecked({});
+      setTimeout(() => setChecked({}), 0);
     }
   }, [tripType]);
 
