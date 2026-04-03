@@ -8,16 +8,31 @@ import Header from '@/components/Header';
 // ---------------------------------------------------------------------------
 
 type Tab = 'gear-guide' | 'trip-checklist' | 'tackle-shops';
-type Importance = 'essential' | 'recommended' | 'nice-to-have';
-type GearCategory = 'All' | 'Half Day / Inshore' | 'Full Day / Offshore' | 'Tuna Trips' | 'Long Range';
 type TripType = 'Half Day' | 'Full Day' | 'Overnight' | 'Multi-Day';
+type Tier = 'bronze' | 'silver' | 'gold';
+type SetupWeight = '25lb' | '30lb' | '40lb' | '50lb' | '80lb' | '100lb' | '130lb';
 
-interface GearItem {
+interface SetupItem {
+  role: string; // 'Rod', 'Reel', 'Line', 'Leader', 'Hooks', 'Jig/Lure'
   name: string;
-  category: GearCategory;
   description: string;
-  priceRange: string;
-  importance: Importance;
+  price: string;
+  link?: string;
+}
+
+interface TierSetup {
+  tier: Tier;
+  items: SetupItem[];
+  totalEstimate: string;
+}
+
+interface WeightSetup {
+  weight: SetupWeight;
+  label: string;
+  description: string;
+  bestFor: string;
+  targetSpecies: string[];
+  tiers: Record<Tier, TierSetup>;
 }
 
 interface TackleShop {
@@ -30,42 +45,128 @@ interface TackleShop {
 // Data
 // ---------------------------------------------------------------------------
 
-const GEAR_ITEMS: GearItem[] = [
-  // Rods
-  { name: 'Penn Carnage III Boat Rod', category: 'Half Day / Inshore', description: 'Versatile inshore rod, great sensitivity for bass and calico. 7\' medium action.', priceRange: '$120 - $160', importance: 'essential' },
-  { name: 'Shimano Terez Conventional', category: 'Full Day / Offshore', description: 'Strong offshore rod for yellowtail and dorado. Fast action blank with Fuji guides.', priceRange: '$200 - $280', importance: 'essential' },
-  { name: 'Calstar Grafighter 700XL', category: 'Tuna Trips', description: 'The SoCal tuna stick. Heavy power for 50-200lb class tuna on the kite or flyline.', priceRange: '$250 - $350', importance: 'essential' },
-  { name: 'Seeker Hercules Long Range Rod', category: 'Long Range', description: 'Built for multi-day trips targeting wahoo, yellowfin, and cow tuna south of the border.', priceRange: '$300 - $400', importance: 'recommended' },
-  // Reels
-  { name: 'Penn Squall II Lever Drag', category: 'Half Day / Inshore', description: 'Reliable lever drag reel for half day boats. Smooth drag, holds plenty of 20lb mono.', priceRange: '$100 - $140', importance: 'essential' },
-  { name: 'Shimano Saragosa SW 5000', category: 'Full Day / Offshore', description: 'Saltwater spinning reel with incredible drag. Handles yellowtail and small tuna.', priceRange: '$220 - $280', importance: 'essential' },
-  { name: 'Accurate Boss Valiant 500N', category: 'Tuna Trips', description: 'Premium 2-speed reel machined in the USA. The gold standard for SoCal tuna fishing.', priceRange: '$500 - $650', importance: 'essential' },
-  { name: 'Avet HXJ Raptor 2-Speed', category: 'Long Range', description: 'High-capacity 2-speed for long range. Holds 500+ yds of 80lb braid.', priceRange: '$450 - $600', importance: 'recommended' },
-  // Line
-  { name: '20lb Monofilament', category: 'Half Day / Inshore', description: 'Standard line for half day trips. Berkley Trilene or Izorline First String are popular choices.', priceRange: '$8 - $15', importance: 'essential' },
-  { name: '50-80lb Braided Line', category: 'Full Day / Offshore', description: 'Braid for offshore work. PowerPro or Suffix 832. Pair with a fluorocarbon leader.', priceRange: '$25 - $40', importance: 'essential' },
-  { name: '100lb Spectra / Braid', category: 'Tuna Trips', description: 'Heavy spectra for tuna. Jerry Brown or Izorline Spectra in 100-130lb test.', priceRange: '$40 - $80', importance: 'essential' },
-  // Terminal Tackle
-  { name: 'Owner Mutu Circle Hooks', category: 'Full Day / Offshore', description: 'Best circle hooks in the game. Sizes 1/0 - 5/0 for live bait fishing.', priceRange: '$6 - $12', importance: 'essential' },
-  { name: 'Mustad Live Bait Hooks', category: 'Half Day / Inshore', description: 'Classic ringed live bait hooks. Sizes 4 - 2/0 for sardine and anchovy.', priceRange: '$4 - $8', importance: 'essential' },
-  { name: 'Torpedo Sinkers (assorted)', category: 'Full Day / Offshore', description: 'Sliding sinkers in 1/2oz - 4oz. Essential for dropper loop and bottom fishing.', priceRange: '$5 - $10', importance: 'recommended' },
-  // Jigs & Lures
-  { name: 'Tady 45 Surface Iron', category: 'Full Day / Offshore', description: 'Iconic SoCal surface iron jig. Blue & white or scrambled egg. Deadly on yellows and barracuda.', priceRange: '$10 - $15', importance: 'recommended' },
-  { name: 'Salas 6X Jr Jig', category: 'Tuna Trips', description: 'Yo-yo style iron jig for deep structure. Must-have for yellowfin tuna and yellowtail.', priceRange: '$10 - $14', importance: 'recommended' },
-  { name: 'Megabait Swimbait', category: 'Long Range', description: 'Large profile swimbait that imitates mackerel. Deadly on cow tuna and wahoo at the islands.', priceRange: '$12 - $20', importance: 'nice-to-have' },
-  // Misc
-  { name: 'Fishing Pliers (aluminum)', category: 'Half Day / Inshore', description: 'Corrosion-resistant split ring pliers. Invaluable for de-hooking and cutting line.', priceRange: '$15 - $40', importance: 'essential' },
-  { name: 'Fillet Knife', category: 'Full Day / Offshore', description: 'Flexible 7-9" fillet knife. Dexter-Russell or Rapala. Keep it sharp.', priceRange: '$15 - $35', importance: 'recommended' },
-  { name: '5-Gallon Bucket', category: 'Half Day / Inshore', description: 'The most versatile item on the boat. Seat, tackle box, wash bucket, fish transport.', priceRange: '$5 - $8', importance: 'recommended' },
-  { name: 'Rod Belt / Harness', category: 'Tuna Trips', description: 'Padded rod belt for fighting big fish. Braid belts save your back on long tuna battles.', priceRange: '$30 - $80', importance: 'essential' },
-  { name: 'Insulated Fish Bag', category: 'Long Range', description: 'Kill bag to keep your catch cold on the ride home. 60-72" size for tuna.', priceRange: '$30 - $60', importance: 'recommended' },
-  // Sun Protection
-  { name: 'Polarized Sunglasses', category: 'Half Day / Inshore', description: 'Quality polarized lenses cut glare and let you spot bait and fish. Amber or copper lens.', priceRange: '$30 - $200', importance: 'essential' },
-  { name: 'UPF 50+ Sun Shirt', category: 'Full Day / Offshore', description: 'Long sleeve performance shirt. Keeps you cool and protected all day on the water.', priceRange: '$25 - $60', importance: 'essential' },
-  { name: 'Sunscreen SPF 50+', category: 'Half Day / Inshore', description: 'Reef-safe, water-resistant sunscreen. Reapply every 2 hours. Your skin will thank you.', priceRange: '$8 - $15', importance: 'essential' },
+// ============================================================================
+// GEAR SETUPS — organized by line class, each with Bronze/Silver/Gold tiers
+//
+// TODO: Fill in Silver and Gold tiers with your preferred recommendations.
+// Bronze = budget-friendly, great starting point
+// Silver = mid-range, best value for serious anglers
+// Gold = premium, top-of-the-line performance
+// ============================================================================
+
+const PLACEHOLDER_ITEM: SetupItem = {
+  role: 'TBD',
+  name: 'Coming Soon',
+  description: 'Recommendation pending — check back soon!',
+  price: 'TBD',
+};
+
+function placeholderTier(tier: Tier, count: number, estimate: string): TierSetup {
+  return { tier, items: Array(count).fill(null).map((_, i) => ({
+    ...PLACEHOLDER_ITEM,
+    role: ['Rod', 'Reel', 'Line', 'Leader', 'Hooks', 'Jig/Lure'][i] || 'Accessory',
+  })), totalEstimate: estimate };
+}
+
+const SETUPS: WeightSetup[] = [
+  {
+    weight: '25lb',
+    label: '25lb Setup',
+    description: 'Light tackle for half-day and inshore trips. Perfect for kelp bass, calico, and yellowtail on light gear.',
+    bestFor: 'Half Day, 3/4 Day inshore trips',
+    targetSpecies: ['Calico Bass', 'Sand Bass', 'Yellowtail', 'Barracuda', 'Bonito'],
+    tiers: {
+      bronze: {
+        tier: 'bronze',
+        totalEstimate: '~$450',
+        items: [
+          { role: 'Reel', name: 'Penn Fathom II Star Drag (Size 12)', description: 'Reliable star drag conventional reel. Full metal body, 30lb max drag, 6.1:1 gear ratio. Holds 430yds of 10lb mono. Great feel and smooth operation for the price.', price: '$300', link: 'https://www.pennfishing.com/products/penn-fathom-ii-star-drag-conventional-reel' },
+          { role: 'Rod', name: 'Penn Carnage III Boat Rod 7\' MH', description: 'Versatile medium-heavy boat rod. Great sensitivity for detecting light bites on calico and bass. Fuji guides, durable composite blank.', price: '$130' },
+          { role: 'Line', name: 'Izorline First String 25lb Mono', description: 'SoCal favorite monofilament. Excellent abrasion resistance for fishing around kelp. Clear color.', price: '$12' },
+          { role: 'Leader', name: 'Seaguar Blue Label 20lb Fluorocarbon', description: '25 yards of invisible fluorocarbon leader. Virtually invisible to finicky bass in clear water.', price: '$10' },
+          { role: 'Hooks', name: 'Mustad Ringed Live Bait #2', description: 'Classic live bait hooks for sardine and anchovy. Ringed eye for easy snelling. Must-have for party boats.', price: '$5' },
+          { role: 'Jig', name: 'Tady 45 Surface Iron (blue/white)', description: 'The iconic SoCal surface iron. Cast and retrieve for yellowtail and barracuda. Every angler needs one.', price: '$12' },
+        ],
+      },
+      silver: placeholderTier('silver', 6, '~$700'),
+      gold: placeholderTier('gold', 6, '~$1,200'),
+    },
+  },
+  {
+    weight: '30lb',
+    label: '30lb Setup',
+    description: 'Versatile all-around setup. Handles everything from big calico to medium yellowtail. The workhorse of SoCal fishing.',
+    bestFor: '3/4 Day, Full Day trips',
+    targetSpecies: ['Yellowtail', 'Calico Bass', 'White Seabass', 'Barracuda', 'Bonito'],
+    tiers: {
+      bronze: placeholderTier('bronze', 6, '~$500'),
+      silver: placeholderTier('silver', 6, '~$850'),
+      gold: placeholderTier('gold', 6, '~$1,500'),
+    },
+  },
+  {
+    weight: '40lb',
+    label: '40lb Setup',
+    description: 'Stepping up for bigger yellowtail and small tuna. Enough backbone to stop a fish running into structure.',
+    bestFor: 'Full Day offshore, Coronado Islands trips',
+    targetSpecies: ['Yellowtail', 'Bluefin Tuna (school)', 'White Seabass', 'Dorado'],
+    tiers: {
+      bronze: placeholderTier('bronze', 6, '~$550'),
+      silver: placeholderTier('silver', 6, '~$950'),
+      gold: placeholderTier('gold', 6, '~$1,800'),
+    },
+  },
+  {
+    weight: '50lb',
+    label: '50lb Setup',
+    description: 'The gateway to big game. Handles 30-80lb class tuna on fly-lined bait. Essential for offshore full-day trips targeting bluefin.',
+    bestFor: 'Offshore tuna trips, overnight trips',
+    targetSpecies: ['Bluefin Tuna', 'Yellowfin Tuna', 'Yellowtail', 'Dorado'],
+    tiers: {
+      bronze: placeholderTier('bronze', 6, '~$650'),
+      silver: placeholderTier('silver', 6, '~$1,100'),
+      gold: placeholderTier('gold', 6, '~$2,200'),
+    },
+  },
+  {
+    weight: '80lb',
+    label: '80lb Setup',
+    description: 'Heavy tackle for big tuna. 2-speed reels are a must at this class. Built to handle 80-150lb bluefin on braid.',
+    bestFor: 'Tuna trips, 1.5 day and 2-day trips',
+    targetSpecies: ['Bluefin Tuna', 'Yellowfin Tuna', 'Wahoo'],
+    tiers: {
+      bronze: placeholderTier('bronze', 6, '~$800'),
+      silver: placeholderTier('silver', 6, '~$1,400'),
+      gold: placeholderTier('gold', 6, '~$2,800'),
+    },
+  },
+  {
+    weight: '100lb',
+    label: '100lb Setup',
+    description: 'Serious big game tackle. For cow-class bluefin, kite fishing, and long-range trips targeting 100lb+ fish.',
+    bestFor: 'Long range, multi-day trips, cow tuna',
+    targetSpecies: ['Bluefin Tuna (cow)', 'Yellowfin Tuna', 'Wahoo', 'Bigeye Tuna'],
+    tiers: {
+      bronze: placeholderTier('bronze', 6, '~$1,000'),
+      silver: placeholderTier('silver', 6, '~$1,800'),
+      gold: placeholderTier('gold', 6, '~$3,500'),
+    },
+  },
+  {
+    weight: '130lb',
+    label: '130lb Setup',
+    description: 'Max class tackle. Stand-up or chair gear for the biggest fish in the Pacific. This is the end game.',
+    bestFor: 'Long range, multi-day, 200lb+ tuna',
+    targetSpecies: ['Bluefin Tuna (giant)', 'Bigeye Tuna', 'Marlin', 'Swordfish'],
+    tiers: {
+      bronze: placeholderTier('bronze', 6, '~$1,200'),
+      silver: placeholderTier('silver', 6, '~$2,200'),
+      gold: placeholderTier('gold', 6, '~$4,500'),
+    },
+  },
 ];
 
-const CATEGORIES: GearCategory[] = ['All', 'Half Day / Inshore', 'Full Day / Offshore', 'Tuna Trips', 'Long Range'];
+const SETUP_WEIGHTS: SetupWeight[] = ['25lb', '30lb', '40lb', '50lb', '80lb', '100lb', '130lb'];
 
 const CHECKLIST_BASE = [
   'Fishing license (CA)',
@@ -107,34 +208,6 @@ const TACKLE_SHOPS: TackleShop[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-function importanceBadge(importance: Importance) {
-  const styles: Record<Importance, { bg: string; text: string; label: string }> = {
-    essential: { bg: 'rgba(34,197,94,0.15)', text: '#22c55e', label: 'Essential' },
-    recommended: { bg: 'rgba(0,212,255,0.12)', text: '#00d4ff', label: 'Recommended' },
-    'nice-to-have': { bg: 'rgba(136,153,170,0.15)', text: '#8899aa', label: 'Nice to Have' },
-  };
-  const s = styles[importance];
-  return (
-    <span
-      className="text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={{ backgroundColor: s.bg, color: s.text }}
-    >
-      {s.label}
-    </span>
-  );
-}
-
-function categoryTag(category: string) {
-  return (
-    <span
-      className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={{ backgroundColor: 'rgba(0,212,255,0.1)', color: '#00d4ff', border: '1px solid rgba(0,212,255,0.2)' }}
-    >
-      {category}
-    </span>
-  );
-}
-
 function storageKey(tripType: TripType) {
   return `bite-report-checklist-${tripType.toLowerCase().replace(/\s+/g, '-')}`;
 }
@@ -151,53 +224,162 @@ function mapsUrl(address: string) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function GearGuide() {
-  const [activeCategory, setActiveCategory] = useState<GearCategory>('All');
+const TIER_META: Record<Tier, { label: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
+  bronze: { label: 'Bronze', color: '#cd7f32', bgColor: '#cd7f3218', borderColor: '#cd7f3244', icon: '🥉' },
+  silver: { label: 'Silver', color: '#c0c0c0', bgColor: '#c0c0c018', borderColor: '#c0c0c044', icon: '🥈' },
+  gold: { label: 'Gold', color: '#ffd700', bgColor: '#ffd70018', borderColor: '#ffd70044', icon: '🥇' },
+};
 
-  const filtered = activeCategory === 'All'
-    ? GEAR_ITEMS
-    : GEAR_ITEMS.filter((g) => g.category === activeCategory);
+function GearGuide() {
+  const [activeWeight, setActiveWeight] = useState<SetupWeight>('25lb');
+  const [activeTier, setActiveTier] = useState<Tier>('bronze');
+
+  const setup = SETUPS.find((s) => s.weight === activeWeight)!;
+  const tierSetup = setup.tiers[activeTier];
+  const tierMeta = TIER_META[activeTier];
 
   return (
     <div>
-      {/* Category filter pills */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {CATEGORIES.map((cat) => {
-          const isActive = cat === activeCategory;
+      {/* Weight class selector */}
+      <div className="mb-4">
+        <p className="text-xs uppercase tracking-wider mb-2" style={{ color: '#8899aa' }}>Line Class</p>
+        <div className="flex flex-wrap gap-2">
+          {SETUP_WEIGHTS.map((w) => {
+            const isActive = w === activeWeight;
+            return (
+              <button
+                key={w}
+                onClick={() => setActiveWeight(w)}
+                className="px-4 py-2 rounded-lg text-sm font-bold transition-all cursor-pointer"
+                style={{
+                  backgroundColor: isActive ? '#00d4ff' : '#131b2e',
+                  color: isActive ? '#0a0f1a' : '#8899aa',
+                  border: `1px solid ${isActive ? '#00d4ff' : '#1e2a42'}`,
+                  boxShadow: isActive ? '0 0 12px rgba(0,212,255,0.3)' : 'none',
+                }}
+              >
+                {w}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Setup header card */}
+      <div
+        className="rounded-xl p-5 mb-5"
+        style={{ backgroundColor: '#131b2e', border: '1px solid #1e2a42' }}
+      >
+        <h3 className="text-xl font-black mb-1" style={{ color: '#e2e8f0' }}>
+          {setup.label}
+        </h3>
+        <p className="text-sm mb-3" style={{ color: '#8899aa' }}>{setup.description}</p>
+        <div className="flex flex-wrap gap-4 text-xs" style={{ color: '#8899aa' }}>
+          <span><strong style={{ color: '#e2e8f0' }}>Best for:</strong> {setup.bestFor}</span>
+          <span><strong style={{ color: '#e2e8f0' }}>Target:</strong> {setup.targetSpecies.join(', ')}</span>
+        </div>
+      </div>
+
+      {/* Tier selector */}
+      <div className="flex gap-3 mb-5">
+        {(['bronze', 'silver', 'gold'] as Tier[]).map((tier) => {
+          const meta = TIER_META[tier];
+          const isActive = tier === activeTier;
+          const tierData = setup.tiers[tier];
           return (
             <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer"
+              key={tier}
+              onClick={() => setActiveTier(tier)}
+              className="flex-1 rounded-xl p-3 text-center transition-all cursor-pointer"
               style={{
-                backgroundColor: isActive ? '#00d4ff' : '#131b2e',
-                color: isActive ? '#0a0f1a' : '#8899aa',
-                border: `1px solid ${isActive ? '#00d4ff' : '#1e2a42'}`,
+                backgroundColor: isActive ? meta.bgColor : '#0d1320',
+                border: `2px solid ${isActive ? meta.color : '#1e2a42'}`,
+                boxShadow: isActive ? `0 0 16px ${meta.color}33` : 'none',
               }}
             >
-              {cat}
+              <div className="text-lg mb-0.5">{meta.icon}</div>
+              <div className="text-sm font-bold" style={{ color: isActive ? meta.color : '#8899aa' }}>
+                {meta.label}
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: '#8899aa' }}>
+                {tierData.totalEstimate}
+              </div>
             </button>
           );
         })}
       </div>
 
-      {/* Gear grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((item) => (
-          <div
-            key={item.name}
-            className="rounded-xl p-4 flex flex-col gap-2"
-            style={{ backgroundColor: '#131b2e', border: '1px solid #1e2a42' }}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="font-bold text-sm" style={{ color: '#e2e8f0' }}>{item.name}</h3>
-              {importanceBadge(item.importance)}
+      {/* Tier items */}
+      <div className="space-y-3">
+        {tierSetup.items.map((item, idx) => {
+          const isPlaceholder = item.name === 'Coming Soon';
+          return (
+            <div
+              key={`${item.role}-${idx}`}
+              className="rounded-xl p-4 flex items-start gap-4"
+              style={{
+                backgroundColor: isPlaceholder ? '#0d1320' : '#131b2e',
+                border: `1px solid ${isPlaceholder ? '#1e2a4266' : '#1e2a42'}`,
+                opacity: isPlaceholder ? 0.6 : 1,
+              }}
+            >
+              {/* Role badge */}
+              <div
+                className="flex-shrink-0 w-16 text-center rounded-lg py-1.5 text-xs font-bold uppercase"
+                style={{
+                  backgroundColor: tierMeta.bgColor,
+                  color: tierMeta.color,
+                  border: `1px solid ${tierMeta.borderColor}`,
+                }}
+              >
+                {item.role}
+              </div>
+
+              {/* Details */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-bold text-sm" style={{ color: isPlaceholder ? '#8899aa' : '#e2e8f0' }}>
+                    {item.name}
+                  </h4>
+                  {item.link && (
+                    <a
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: '#00d4ff18', color: '#00d4ff', border: '1px solid #00d4ff33' }}
+                    >
+                      View
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs mt-1 leading-relaxed" style={{ color: '#8899aa' }}>
+                  {item.description}
+                </p>
+              </div>
+
+              {/* Price */}
+              <div className="flex-shrink-0 text-right">
+                <span className="text-sm font-bold" style={{ color: isPlaceholder ? '#8899aa' : '#e2e8f0' }}>
+                  {item.price}
+                </span>
+              </div>
             </div>
-            <div>{categoryTag(item.category)}</div>
-            <p className="text-sm leading-relaxed flex-1" style={{ color: '#8899aa' }}>{item.description}</p>
-            <p className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>{item.priceRange}</p>
-          </div>
-        ))}
+          );
+        })}
+      </div>
+
+      {/* Total estimate */}
+      <div
+        className="mt-4 rounded-xl p-4 flex items-center justify-between"
+        style={{ backgroundColor: tierMeta.bgColor, border: `1px solid ${tierMeta.borderColor}` }}
+      >
+        <span className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>
+          {tierMeta.icon} {tierMeta.label} Setup Total Estimate
+        </span>
+        <span className="text-lg font-black" style={{ color: tierMeta.color }}>
+          {tierSetup.totalEstimate}
+        </span>
       </div>
     </div>
   );
