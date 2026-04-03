@@ -12,14 +12,29 @@ interface CatchEntry {
   id: string;
   boat: string;
   landing: 'seaforth' | 'fishermans' | 'hm_landing' | 'point_loma' | 'helgrens';
-  tripType: string; // '1/2 Day' | '3/4 Day' | 'Full Day' | 'Overnight' | '1.5 Day' | '2 Day' | '3 Day'
-  date: string; // ISO date
-  species: string;
-  count: number;
+  tripType: string;
+  date: string;
+  species: string;    // primary/highlighted species
+  count: number;      // count for primary species
   anglers: number;
   area: string;
   highlight?: boolean;
+  also?: { species: string; count: number }[]; // other species caught on same trip
 }
+
+// Priority order for primary species display
+// Bluefin & Yellowtail first, then Calico/Barracuda, then Rockfish last
+const SPECIES_PRIORITY: Record<string, number> = {
+  'Bluefin Tuna': 1,
+  'Yellowfin Tuna': 2,
+  'Yellowtail': 3,
+  'White Seabass': 4,
+  'Dorado': 5,
+  'Calico Bass': 6,
+  'Barracuda': 7,
+  'Lingcod': 8,
+  'Rockfish': 9,
+};
 
 // ---------------------------------------------------------------------------
 // Hardcoded catch data — ~25 entries across all 5 landings
@@ -30,35 +45,35 @@ interface CatchEntry {
 // Trip types and counts are matched to realistic boat/landing combinations.
 const CATCH_DATA: CatchEntry[] = [
   // --- Seaforth ---
-  { id: 'sf-01', boat: 'New Seaforth', landing: 'seaforth', tripType: '1/2 Day', date: '2026-04-02', species: 'Yellowtail', count: 12, anglers: 32, area: 'Coronado Islands', highlight: true },
-  { id: 'sf-02', boat: 'San Diego', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-02', species: 'Calico Bass', count: 85, anglers: 28, area: 'La Jolla Kelp' },
-  { id: 'sf-03', boat: 'Cortez', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-02', species: 'Bluefin Tuna', count: 8, anglers: 25, area: '9-Mile Bank', highlight: true },
-  { id: 'sf-04', boat: 'Apollo', landing: 'seaforth', tripType: '3/4 Day', date: '2026-04-01', species: 'Rockfish', count: 156, anglers: 34, area: 'Point Loma Kelp' },
-  { id: 'sf-05', boat: 'Sea Watch', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-01', species: 'White Seabass', count: 4, anglers: 22, area: 'Coronado Islands', highlight: true },
+  { id: 'sf-01', boat: 'New Seaforth', landing: 'seaforth', tripType: '1/2 Day', date: '2026-04-02', species: 'Yellowtail', count: 12, anglers: 32, area: 'Coronado Islands', highlight: true, also: [{ species: 'Calico Bass', count: 24 }, { species: 'Barracuda', count: 8 }] },
+  { id: 'sf-02', boat: 'San Diego', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-02', species: 'Calico Bass', count: 85, anglers: 28, area: 'La Jolla Kelp', also: [{ species: 'Sheephead', count: 12 }, { species: 'Whitefish', count: 18 }] },
+  { id: 'sf-03', boat: 'Cortez', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-02', species: 'Bluefin Tuna', count: 8, anglers: 25, area: '9-Mile Bank', highlight: true, also: [{ species: 'Yellowtail', count: 14 }, { species: 'Bonito', count: 6 }] },
+  { id: 'sf-04', boat: 'Apollo', landing: 'seaforth', tripType: '3/4 Day', date: '2026-04-01', species: 'Rockfish', count: 156, anglers: 34, area: 'Point Loma Kelp', also: [{ species: 'Sculpin', count: 22 }, { species: 'Sheephead', count: 15 }] },
+  { id: 'sf-05', boat: 'Sea Watch', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-01', species: 'White Seabass', count: 4, anglers: 22, area: 'Coronado Islands', highlight: true, also: [{ species: 'Yellowtail', count: 18 }, { species: 'Calico Bass', count: 30 }] },
   // --- Fisherman's Landing ---
-  { id: 'fl-01', boat: 'Liberty', landing: 'fishermans', tripType: 'Full Day', date: '2026-04-02', species: 'Bluefin Tuna', count: 15, anglers: 26, area: '9-Mile Bank', highlight: true },
-  { id: 'fl-02', boat: 'Pacific Queen', landing: 'fishermans', tripType: 'Overnight', date: '2026-04-02', species: 'Yellowtail', count: 67, anglers: 36, area: 'Coronado Islands', highlight: true },
-  { id: 'fl-03', boat: 'Excel', landing: 'fishermans', tripType: '2.5 Day', date: '2026-04-01', species: 'Yellowfin Tuna', count: 41, anglers: 22, area: '60-Mile Bank' },
-  { id: 'fl-04', boat: 'Polaris Supreme', landing: 'fishermans', tripType: '3 Day', date: '2026-04-01', species: 'Bluefin Tuna', count: 32, anglers: 20, area: 'Tanner Bank', highlight: true },
-  { id: 'fl-05', boat: 'Fortune', landing: 'fishermans', tripType: '3/4 Day', date: '2026-04-02', species: 'Barracuda', count: 48, anglers: 29, area: 'Point Loma Kelp' },
-  { id: 'fl-06', boat: 'Dolphin', landing: 'fishermans', tripType: '1/2 Day', date: '2026-04-01', species: 'Rockfish', count: 95, anglers: 33, area: 'Pt Loma Deep' },
+  { id: 'fl-01', boat: 'Liberty', landing: 'fishermans', tripType: 'Full Day', date: '2026-04-02', species: 'Bluefin Tuna', count: 15, anglers: 26, area: '9-Mile Bank', highlight: true, also: [{ species: 'Yellowtail', count: 22 }, { species: 'Bonito', count: 10 }] },
+  { id: 'fl-02', boat: 'Pacific Queen', landing: 'fishermans', tripType: 'Overnight', date: '2026-04-02', species: 'Yellowtail', count: 67, anglers: 36, area: 'Coronado Islands', highlight: true, also: [{ species: 'Calico Bass', count: 45 }, { species: 'Barracuda', count: 18 }] },
+  { id: 'fl-03', boat: 'Excel', landing: 'fishermans', tripType: '2.5 Day', date: '2026-04-01', species: 'Yellowfin Tuna', count: 41, anglers: 22, area: '60-Mile Bank', also: [{ species: 'Dorado', count: 8 }, { species: 'Skipjack', count: 15 }] },
+  { id: 'fl-04', boat: 'Polaris Supreme', landing: 'fishermans', tripType: '3 Day', date: '2026-04-01', species: 'Bluefin Tuna', count: 32, anglers: 20, area: 'Tanner Bank', highlight: true, also: [{ species: 'Yellowfin Tuna', count: 14 }, { species: 'Yellowtail', count: 8 }] },
+  { id: 'fl-05', boat: 'Fortune', landing: 'fishermans', tripType: '3/4 Day', date: '2026-04-02', species: 'Barracuda', count: 48, anglers: 29, area: 'Point Loma Kelp', also: [{ species: 'Calico Bass', count: 35 }, { species: 'Sand Bass', count: 12 }] },
+  { id: 'fl-06', boat: 'Dolphin', landing: 'fishermans', tripType: '1/2 Day', date: '2026-04-01', species: 'Rockfish', count: 95, anglers: 33, area: 'Pt Loma Deep', also: [{ species: 'Sculpin', count: 18 }, { species: 'Whitefish', count: 10 }] },
   // --- H&M Landing ---
-  { id: 'hm-01', boat: 'Mission Belle', landing: 'hm_landing', tripType: 'Full Day', date: '2026-04-02', species: 'Calico Bass', count: 62, anglers: 21, area: 'La Jolla Kelp' },
-  { id: 'hm-02', boat: 'Patriot', landing: 'hm_landing', tripType: '3/4 Day', date: '2026-04-02', species: 'Yellowtail', count: 18, anglers: 27, area: 'Coronado Islands', highlight: true },
-  { id: 'hm-03', boat: 'Daily Double', landing: 'hm_landing', tripType: '1/2 Day', date: '2026-04-01', species: 'White Seabass', count: 3, anglers: 14, area: 'La Jolla Kelp', highlight: true },
-  { id: 'hm-04', boat: 'Shogun', landing: 'hm_landing', tripType: '2 Day', date: '2026-04-01', species: 'Yellowfin Tuna', count: 28, anglers: 18, area: '43-Fathom Spot' },
-  { id: 'hm-05', boat: 'Patriot', landing: 'hm_landing', tripType: '3/4 Day', date: '2026-04-01', species: 'Lingcod', count: 11, anglers: 16, area: 'Pt Loma Deep' },
+  { id: 'hm-01', boat: 'Mission Belle', landing: 'hm_landing', tripType: 'Full Day', date: '2026-04-02', species: 'Calico Bass', count: 62, anglers: 21, area: 'La Jolla Kelp', also: [{ species: 'Sheephead', count: 8 }, { species: 'Sand Bass', count: 14 }] },
+  { id: 'hm-02', boat: 'Patriot', landing: 'hm_landing', tripType: '3/4 Day', date: '2026-04-02', species: 'Yellowtail', count: 18, anglers: 27, area: 'Coronado Islands', highlight: true, also: [{ species: 'Barracuda', count: 12 }, { species: 'Bonito', count: 9 }] },
+  { id: 'hm-03', boat: 'Daily Double', landing: 'hm_landing', tripType: '1/2 Day', date: '2026-04-01', species: 'White Seabass', count: 3, anglers: 14, area: 'La Jolla Kelp', highlight: true, also: [{ species: 'Calico Bass', count: 16 }] },
+  { id: 'hm-04', boat: 'Shogun', landing: 'hm_landing', tripType: '2 Day', date: '2026-04-01', species: 'Yellowfin Tuna', count: 28, anglers: 18, area: '43-Fathom Spot', also: [{ species: 'Yellowtail', count: 12 }, { species: 'Dorado', count: 5 }] },
+  { id: 'hm-05', boat: 'Patriot', landing: 'hm_landing', tripType: '3/4 Day', date: '2026-04-01', species: 'Lingcod', count: 11, anglers: 16, area: 'Pt Loma Deep', also: [{ species: 'Rockfish', count: 42 }, { species: 'Sculpin', count: 8 }] },
   // --- Point Loma SF ---
-  { id: 'pl-01', boat: 'Point Loma', landing: 'point_loma', tripType: 'Full Day', date: '2026-04-02', species: 'Yellowtail', count: 35, anglers: 31, area: 'Coronado Islands', highlight: true },
-  { id: 'pl-02', boat: 'New Lo-An', landing: 'point_loma', tripType: '3/4 Day', date: '2026-04-02', species: 'Calico Bass', count: 72, anglers: 24, area: 'Point Loma Kelp' },
-  { id: 'pl-03', boat: 'Point Loma', landing: 'point_loma', tripType: 'Full Day', date: '2026-04-01', species: 'Barracuda', count: 44, anglers: 28, area: 'La Jolla Kelp' },
-  { id: 'pl-04', boat: 'Premier', landing: 'point_loma', tripType: '1.5 Day', date: '2026-04-01', species: 'Bluefin Tuna', count: 19, anglers: 18, area: '9-Mile Bank', highlight: true },
+  { id: 'pl-01', boat: 'Point Loma', landing: 'point_loma', tripType: 'Full Day', date: '2026-04-02', species: 'Yellowtail', count: 35, anglers: 31, area: 'Coronado Islands', highlight: true, also: [{ species: 'Calico Bass', count: 28 }, { species: 'Barracuda', count: 15 }] },
+  { id: 'pl-02', boat: 'New Lo-An', landing: 'point_loma', tripType: '3/4 Day', date: '2026-04-02', species: 'Calico Bass', count: 72, anglers: 24, area: 'Point Loma Kelp', also: [{ species: 'Sand Bass', count: 18 }, { species: 'Sheephead', count: 9 }] },
+  { id: 'pl-03', boat: 'Point Loma', landing: 'point_loma', tripType: 'Full Day', date: '2026-04-01', species: 'Barracuda', count: 44, anglers: 28, area: 'La Jolla Kelp', also: [{ species: 'Calico Bass', count: 32 }, { species: 'Bonito', count: 11 }] },
+  { id: 'pl-04', boat: 'Premier', landing: 'point_loma', tripType: '1.5 Day', date: '2026-04-01', species: 'Bluefin Tuna', count: 19, anglers: 18, area: '9-Mile Bank', highlight: true, also: [{ species: 'Yellowtail', count: 24 }] },
   // --- Helgren's ---
-  { id: 'hg-01', boat: 'Oceanside 95', landing: 'helgrens', tripType: '3/4 Day', date: '2026-04-02', species: 'Yellowtail', count: 22, anglers: 20, area: 'Oceanside Kelp', highlight: true },
-  { id: 'hg-02', boat: 'Sea Star', landing: 'helgrens', tripType: '1/2 Day', date: '2026-04-02', species: 'Calico Bass', count: 38, anglers: 24, area: 'Carlsbad Kelp' },
-  { id: 'hg-03', boat: 'Oceanside 95', landing: 'helgrens', tripType: 'Full Day', date: '2026-04-01', species: 'Rockfish', count: 145, anglers: 30, area: 'Oceanside Deep' },
-  { id: 'hg-04', boat: 'Sea Star', landing: 'helgrens', tripType: '1/2 Day', date: '2026-04-01', species: 'Lingcod', count: 7, anglers: 18, area: 'Camp Pendleton Reef' },
-  { id: 'hg-05', boat: 'Oceanside 95', landing: 'helgrens', tripType: '3/4 Day', date: '2026-04-02', species: 'White Seabass', count: 5, anglers: 15, area: 'Carlsbad Kelp', highlight: true },
+  { id: 'hg-01', boat: 'Oceanside 95', landing: 'helgrens', tripType: '3/4 Day', date: '2026-04-02', species: 'Yellowtail', count: 22, anglers: 20, area: 'Oceanside Kelp', highlight: true, also: [{ species: 'Calico Bass', count: 15 }, { species: 'Barracuda', count: 7 }] },
+  { id: 'hg-02', boat: 'Sea Star', landing: 'helgrens', tripType: '1/2 Day', date: '2026-04-02', species: 'Calico Bass', count: 38, anglers: 24, area: 'Carlsbad Kelp', also: [{ species: 'Sand Bass', count: 12 }] },
+  { id: 'hg-03', boat: 'Oceanside 95', landing: 'helgrens', tripType: 'Full Day', date: '2026-04-01', species: 'Rockfish', count: 145, anglers: 30, area: 'Oceanside Deep', also: [{ species: 'Lingcod', count: 8 }, { species: 'Sheephead', count: 14 }] },
+  { id: 'hg-04', boat: 'Sea Star', landing: 'helgrens', tripType: '1/2 Day', date: '2026-04-01', species: 'Lingcod', count: 7, anglers: 18, area: 'Camp Pendleton Reef', also: [{ species: 'Rockfish', count: 52 }] },
+  { id: 'hg-05', boat: 'Oceanside 95', landing: 'helgrens', tripType: '3/4 Day', date: '2026-04-02', species: 'White Seabass', count: 5, anglers: 15, area: 'Carlsbad Kelp', highlight: true, also: [{ species: 'Calico Bass', count: 20 }, { species: 'Barracuda', count: 6 }] },
 ];
 
 // Sort newest first
@@ -243,46 +258,56 @@ function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatN
         </p>
       </div>
 
-      {/* RIGHT: species + count */}
+      {/* RIGHT: primary species + count + secondary species */}
       <div
         style={{
           flexShrink: 0,
           textAlign: 'right',
           display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: '4px',
+          alignItems: 'center',
+          gap: '10px',
         }}
       >
-        {/* Species name */}
-        <span
-          style={{
-            display: 'inline-block',
-            padding: '2px 8px',
-            borderRadius: '9999px',
-            fontSize: '11px',
-            fontWeight: 600,
-            backgroundColor: speciesColor.bg,
-            color: speciesColor.text,
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {entry.species}
-        </span>
+        {/* Primary catch — large */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+          <span
+            style={{
+              display: 'inline-block',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              fontSize: '11px',
+              fontWeight: 600,
+              backgroundColor: speciesColor.bg,
+              color: speciesColor.text,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {entry.species}
+          </span>
+          <span
+            style={{
+              fontSize: '22px',
+              fontWeight: 900,
+              color: speciesColor.text,
+              lineHeight: 1,
+              letterSpacing: '-0.02em',
+              textShadow: entry.highlight ? `0 0 12px ${speciesColor.text}60` : undefined,
+            }}
+          >
+            {entry.count}
+          </span>
+        </div>
 
-        {/* Count */}
-        <span
-          style={{
-            fontSize: '22px',
-            fontWeight: 900,
-            color: speciesColor.text,
-            lineHeight: 1,
-            letterSpacing: '-0.02em',
-            textShadow: entry.highlight ? `0 0 12px ${speciesColor.text}60` : undefined,
-          }}
-        >
-          {entry.count}
-        </span>
+        {/* Secondary catches — smaller, stacked */}
+        {entry.also && entry.also.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', borderLeft: '1px solid #1e2a42', paddingLeft: '8px' }}>
+            {entry.also.map((a) => (
+              <span key={a.species} style={{ fontSize: '10px', color: '#8899aa', whiteSpace: 'nowrap' }}>
+                {a.species} <span style={{ fontWeight: 700, color: '#e2e8f0' }}>{a.count}</span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
