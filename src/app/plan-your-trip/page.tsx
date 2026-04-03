@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import TripSearch from '@/components/trip-planner/TripSearch';
@@ -40,9 +40,37 @@ export default function PlanYourTripPage() {
   const [anglers, setAnglers] = useState(1);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
+  const [liveTrips, setLiveTrips] = useState<ScheduledTrip[] | null>(null);
+  const [tripsLoading, setTripsLoading] = useState(true);
+
+  // Fetch live trip data from scraper
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/trips', { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data: ScheduledTrip[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setTimeout(() => setLiveTrips(data), 0);
+        }
+      })
+      .catch(() => {/* use static fallback */})
+      .finally(() => setTimeout(() => setTripsLoading(false), 0));
+    return () => controller.abort();
+  }, []);
+
+  // Use live data if available, merge with static private charters
+  const allTrips = useMemo(() => {
+    const privateCharters = TRIP_SCHEDULE.filter((t) => t.charterType === 'private_charter');
+    if (liveTrips && liveTrips.length > 0) {
+      return [...liveTrips, ...privateCharters];
+    }
+    return TRIP_SCHEDULE;
+  }, [liveTrips]);
+
+  const isLiveData = liveTrips !== null && liveTrips.length > 0;
 
   const filteredTrips = useMemo(() => {
-    let results: ScheduledTrip[] = [...TRIP_SCHEDULE];
+    let results: ScheduledTrip[] = [...allTrips];
 
     // If a boat name was passed via query param, filter to that boat first
     if (boatParam) {
@@ -155,10 +183,22 @@ export default function PlanYourTripPage() {
           <h1 className="text-2xl sm:text-3xl font-bold" style={{ color: '#e2e8f0' }}>
             Plan Your <span style={{ color: '#00d4ff' }}>Trip</span>
           </h1>
-          <p className="text-sm mt-1" style={{ color: '#8899aa' }}>
+          <p className="text-sm mt-1 flex items-center justify-center gap-2" style={{ color: '#8899aa' }}>
             {boatParam
               ? `Showing trips on the ${boatParam}`
               : 'Find the perfect San Diego sportfishing trip'}
+            {!boatParam && (
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider"
+                style={{
+                  color: tripsLoading ? '#8899aa' : isLiveData ? '#22c55e' : '#f97316',
+                  backgroundColor: tripsLoading ? '#8899aa15' : isLiveData ? '#22c55e15' : '#f9731615',
+                  border: `1px solid ${tripsLoading ? '#8899aa33' : isLiveData ? '#22c55e33' : '#f9731633'}`,
+                }}
+              >
+                {tripsLoading ? 'Loading...' : isLiveData ? `${allTrips.length} Live Trips` : 'Sample Data'}
+              </span>
+            )}
           </p>
           {boatParam && (
             <button
@@ -187,7 +227,7 @@ export default function PlanYourTripPage() {
 
         {/* Price calendar */}
         <PriceCalendar
-          trips={TRIP_SCHEDULE}
+          trips={allTrips}
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
         />
@@ -216,7 +256,7 @@ export default function PlanYourTripPage() {
         {/* Results area */}
         <div className="flex gap-5">
           <div className={`flex-shrink-0 w-[240px] ${showFilters ? 'block' : 'hidden'} md:block`}>
-            <TripFilters trips={TRIP_SCHEDULE} filters={filters} onFilterChange={setFilters} />
+            <TripFilters trips={allTrips} filters={filters} onFilterChange={setFilters} />
           </div>
           <div className="flex-1 min-w-0">
             <TripResults trips={filteredTrips} onViewOnMap={handleViewOnMap} />
