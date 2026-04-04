@@ -171,6 +171,7 @@ export default function DateCalendar({
   function handleDayClick(day: DayData) {
     if (day.isPast || day.tripCount === 0) return;
     onDateChange(selectedDate === day.iso ? null : day.iso);
+    onClose();
   }
 
   function handleReset() {
