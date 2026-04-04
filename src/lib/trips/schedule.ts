@@ -997,6 +997,48 @@ const WEEKLY_TEMPLATES: WeeklyTemplate[] = [
 ];
 
 /**
+ * Deterministic pseudo-random based on a string seed (date + boat).
+ * Produces a float between 0 and 1.
+ */
+function seededRandom(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs((Math.sin(hash) * 10000) % 1);
+}
+
+/**
+ * Compute a realistic price for a generated trip.
+ *
+ * Factors:
+ *  - Base price from the template
+ *  - Weekend premium: +15% on Fri/Sat, +10% on Sun
+ *  - Seasonal ramp: prices increase ~12% from early April to late May
+ *  - Per-day jitter: ±8% variation seeded by date+boat (deterministic)
+ */
+function computePrice(base: number, iso: string, dow: number, boatName: string): number {
+  // Weekend premium
+  let multiplier = 1.0;
+  if (dow === 5 || dow === 6) multiplier += 0.15; // Fri, Sat
+  else if (dow === 0) multiplier += 0.10;          // Sun
+
+  // Seasonal ramp: April 10 = day 0, May 31 = day 51
+  const refDate = new Date('2026-04-10T12:00:00').getTime();
+  const thisDate = new Date(iso + 'T12:00:00').getTime();
+  const dayOffset = Math.max(0, (thisDate - refDate) / 86400000);
+  const seasonPct = dayOffset / 51; // 0..1 over the range
+  multiplier += seasonPct * 0.12;   // up to +12%
+
+  // Deterministic jitter ±8%
+  const jitter = (seededRandom(iso + boatName) - 0.5) * 0.16;
+  multiplier += jitter;
+
+  return Math.round(base * multiplier * 100) / 100;
+}
+
+/**
  * Generate trips for a date range based on weekly templates.
  * startIso/endIso are inclusive ISO date strings e.g. '2026-04-10'.
  */
@@ -1013,9 +1055,13 @@ function generateWeeklyTrips(startIso: string, endIso: string): ScheduledTrip[] 
     for (const tpl of WEEKLY_TEMPLATES) {
       if (!tpl.dayOfWeek.includes(dow)) continue;
 
-      // Slight randomization of spots left so it feels real
-      const spotsVariance = Math.floor(Math.random() * 8) - 3;
-      const spots = Math.max(2, Math.min(tpl.maxAnglers - 5, tpl.spotsLeft + spotsVariance));
+      // Realistic price with weekend/seasonal/jitter variation
+      const price = computePrice(tpl.pricePerPerson, iso, dow, tpl.boatName);
+
+      // Spots variation: fewer spots on weekends, seeded deterministically
+      const rnd = seededRandom(iso + tpl.boatName + 'spots');
+      const weekendDrain = (dow === 0 || dow === 5 || dow === 6) ? 8 : 0;
+      const spots = Math.max(2, Math.round(tpl.spotsLeft - weekendDrain + (rnd * 10 - 5)));
 
       const trip: ScheduledTrip = {
         id: `gen-${tpl.boatName.toLowerCase().replace(/[^a-z0-9]/g, '')}-${dayNum}-${tpl.duration.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
@@ -1025,7 +1071,7 @@ function generateWeeklyTrips(startIso: string, endIso: string): ScheduledTrip[] 
         departureTime: tpl.departureTime,
         duration: tpl.duration,
         durationHours: tpl.durationHours,
-        pricePerPerson: tpl.pricePerPerson,
+        pricePerPerson: price,
         maxAnglers: tpl.maxAnglers,
         spotsLeft: spots,
         description: tpl.description,

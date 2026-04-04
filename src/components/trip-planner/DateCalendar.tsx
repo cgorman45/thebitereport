@@ -30,10 +30,15 @@ function matchesDuration(tripDuration: string, filterDuration: string): boolean 
   const fd = filterDuration.toLowerCase();
   if (fd === 'half day') return td.includes('1/2') || td.includes('half');
   if (fd === '3/4 day') return td.includes('3/4');
-  if (fd === 'full day') return td === 'full day';
-  if (fd === 'overnight') return td === 'overnight';
-  if (fd === 'multi-day') return td.includes('1.5') || td.includes('2 day') || td.includes('3 day');
-  if (fd === 'long range') return td === 'long range';
+  if (fd === 'full day') return td.includes('full') && td.includes('day');
+  if (fd === 'overnight') return td.includes('overnight');
+  if (fd === 'multi-day') {
+    // Avoid matching "1/2 day" as "2 day" — require word boundary before the digit
+    return td.includes('1.5') || td.includes('2.5')
+      || /(?<![/\d])2\s*day/i.test(td)
+      || /(?<![/\d])3\s*day/i.test(td);
+  }
+  if (fd === 'long range') return td.includes('long range') || /(?<![/\d])([8-9]|1[0-9]|2\d)\s*day/i.test(td);
   return true;
 }
 
@@ -261,7 +266,7 @@ export default function DateCalendar({
                           : '#8899aa',
                     }}
                   >
-                    ${day.cheapest}
+                    ${Math.round(day.cheapest)}
                   </span>
                 )}
               </button>
