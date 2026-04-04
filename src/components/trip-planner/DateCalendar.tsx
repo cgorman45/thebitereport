@@ -127,6 +127,8 @@ export default function DateCalendar({
   const priceMap = useMemo(() => {
     const map: Record<string, { cheapest: number; count: number }> = {};
     for (const trip of trips) {
+      // Skip trips with no valid price
+      if (!trip.pricePerPerson || trip.pricePerPerson <= 0) continue;
       // Filter by duration if one is selected
       if (selectedDuration && !matchesDuration(trip.duration, selectedDuration)) {
         continue;

@@ -32,6 +32,8 @@ export default function PriceCalendar({
   const dayStats: Record<string, { cheapest: number; count: number }> = {};
 
   for (const trip of trips) {
+    // Skip trips with no valid price
+    if (!trip.pricePerPerson || trip.pricePerPerson <= 0) continue;
     const d = trip.departureDate;
     if (!dayStats[d]) {
       dayStats[d] = { cheapest: trip.pricePerPerson, count: 1 };

@@ -125,10 +125,13 @@ function parseSpotsLeft(raw: string): number {
 
 /**
  * Parse a price string like "$75" into a number.
+ * Returns -1 if no valid price can be extracted (e.g. "Call for pricing", empty).
  */
 function parsePrice(raw: string): number {
   const match = raw.replace(/,/g, '').match(/[\d.]+/);
-  return match ? parseFloat(match[0]) : 0;
+  if (!match) return -1;
+  const price = parseFloat(match[0]);
+  return price > 0 ? price : -1;
 }
 
 /**
@@ -235,6 +238,9 @@ async function scrapeReservationPage(
     const description = commentCell.find('.trip-comments').text().trim();
 
     const status = deriveStatus(spotsLeft, description);
+
+    // Skip trips with no valid price (parsePrice returns -1 for unparseable)
+    if (pricePerPerson <= 0) return;
 
     trips.push({
       id: crypto.randomUUID(),
