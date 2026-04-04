@@ -872,6 +872,184 @@ export const TRIP_SCHEDULE: ScheduledTrip[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Extend schedule through May 31 by repeating weekly boat patterns
+// ---------------------------------------------------------------------------
+
+/**
+ * Each template defines a boat that runs on certain days of the week.
+ * dayOfWeek: 0=Sun … 6=Sat
+ */
+interface WeeklyTemplate {
+  boatName: string;
+  landing: ScheduledTrip['landing'];
+  dayOfWeek: number[];
+  departureTime: string;
+  duration: ScheduledTrip['duration'];
+  durationHours: number;
+  pricePerPerson: number;
+  maxAnglers: number;
+  spotsLeft: number;
+  description: string;
+  targetSpecies: string[];
+  mmsi?: number;
+  charterType?: ScheduledTrip['charterType'];
+  operator?: string;
+  maxPassengers?: number;
+  privateBoatRate?: number;
+}
+
+const WEEKLY_TEMPLATES: WeeklyTemplate[] = [
+  // Seaforth — New Seaforth AM/PM half-days daily
+  {
+    boatName: 'New Seaforth', landing: 'seaforth', dayOfWeek: [0,1,2,3,4,5,6],
+    departureTime: '6:00 AM', duration: '1/2 Day AM', durationHours: 5,
+    pricePerPerson: 75, maxAnglers: 65, spotsLeft: 22,
+    description: 'Morning half-day targeting kelp bass and yellows along the Coronado Islands kelp line.',
+    targetSpecies: ['calico bass', 'yellowtail', 'sheephead', 'sculpin'], mmsi: 367703230,
+  },
+  {
+    boatName: 'New Seaforth', landing: 'seaforth', dayOfWeek: [0,1,2,3,4,5,6],
+    departureTime: '1:00 PM', duration: '1/2 Day PM', durationHours: 5,
+    pricePerPerson: 75, maxAnglers: 65, spotsLeft: 30,
+    description: 'Afternoon half-day targeting kelp bass and barracuda near the Islands.',
+    targetSpecies: ['calico bass', 'barracuda', 'sheephead'], mmsi: 367703230,
+  },
+  // Seaforth — San Diego 3/4 day Wed–Sun
+  {
+    boatName: 'San Diego', landing: 'seaforth', dayOfWeek: [0,3,4,5,6],
+    departureTime: '6:30 AM', duration: '3/4 Day', durationHours: 10,
+    pricePerPerson: 150, maxAnglers: 45, spotsLeft: 15,
+    description: '3/4-day trip to the Coronado Islands for yellowtail and bass.',
+    targetSpecies: ['yellowtail', 'calico bass', 'barracuda', 'white seabass'], mmsi: 366918840,
+  },
+  // Seaforth — Sea Watch full day Fri/Sat/Sun
+  {
+    boatName: 'Sea Watch', landing: 'seaforth', dayOfWeek: [0,5,6],
+    departureTime: '5:00 AM', duration: 'Full Day', durationHours: 16,
+    pricePerPerson: 250, maxAnglers: 35, spotsLeft: 10,
+    description: 'Full-day offshore trip targeting tuna and yellowtail at the banks.',
+    targetSpecies: ['bluefin tuna', 'yellowtail', 'dorado'], mmsi: 367710460,
+  },
+  // Fisherman's — Dolphin 3/4 day daily
+  {
+    boatName: 'Dolphin', landing: 'fishermans', dayOfWeek: [0,1,2,3,4,5,6],
+    departureTime: '6:00 AM', duration: '3/4 Day', durationHours: 10,
+    pricePerPerson: 80, maxAnglers: 50, spotsLeft: 20,
+    description: '3/4-day trip to the Islands for yellowtail and bass.',
+    targetSpecies: ['yellowtail', 'calico bass', 'barracuda'], mmsi: 367453390,
+  },
+  // Fisherman's — Liberty full day Tue/Thu/Sat/Sun
+  {
+    boatName: 'Liberty', landing: 'fishermans', dayOfWeek: [0,2,4,6],
+    departureTime: '5:30 AM', duration: 'Full Day', durationHours: 16,
+    pricePerPerson: 250, maxAnglers: 40, spotsLeft: 12,
+    description: 'Full-day offshore run to the banks for tuna and yellowtail.',
+    targetSpecies: ['bluefin tuna', 'yellowfin tuna', 'yellowtail', 'dorado'], mmsi: 367678200,
+  },
+  // Fisherman's — Pacific Queen overnight Fri/Sat
+  {
+    boatName: 'Pacific Queen', landing: 'fishermans', dayOfWeek: [5,6],
+    departureTime: '10:00 PM', duration: 'Overnight', durationHours: 20,
+    pricePerPerson: 375, maxAnglers: 30, spotsLeft: 8,
+    description: 'Overnight trip to the outer banks targeting tuna and yellowtail.',
+    targetSpecies: ['bluefin tuna', 'yellowfin tuna', 'yellowtail'], mmsi: 367438790,
+  },
+  // H&M Landing — Mission Belle half day daily
+  {
+    boatName: 'Mission Belle', landing: 'hm_landing', dayOfWeek: [0,1,2,3,4,5,6],
+    departureTime: '7:30 AM', duration: '1/2 Day AM', durationHours: 5,
+    pricePerPerson: 70, maxAnglers: 50, spotsLeft: 25,
+    description: 'Morning half-day trip from H&M Landing targeting local species.',
+    targetSpecies: ['calico bass', 'sculpin', 'sand bass'],
+  },
+  // H&M Landing — Patriot 3/4 day Fri–Sun
+  {
+    boatName: 'Patriot', landing: 'hm_landing', dayOfWeek: [0,5,6],
+    departureTime: '6:00 AM', duration: '3/4 Day', durationHours: 10,
+    pricePerPerson: 140, maxAnglers: 45, spotsLeft: 18,
+    description: '3/4-day trip from H&M Landing targeting yellowtail and bass.',
+    targetSpecies: ['yellowtail', 'calico bass', 'barracuda', 'white seabass'],
+  },
+  // Point Loma — Point Loma half day daily
+  {
+    boatName: 'Point Loma', landing: 'point_loma', dayOfWeek: [0,1,2,3,4,5,6],
+    departureTime: '6:00 AM', duration: '1/2 Day AM', durationHours: 5,
+    pricePerPerson: 68, maxAnglers: 55, spotsLeft: 20,
+    description: 'Morning half-day out of Point Loma targeting kelp bass and rockfish.',
+    targetSpecies: ['calico bass', 'rockfish', 'sculpin', 'sheephead'],
+  },
+  // Point Loma — New Lo-An 3/4 day Wed/Thu/Fri/Sat/Sun
+  {
+    boatName: 'New Lo-An', landing: 'point_loma', dayOfWeek: [0,3,4,5,6],
+    departureTime: '6:30 AM', duration: '3/4 Day', durationHours: 10,
+    pricePerPerson: 135, maxAnglers: 40, spotsLeft: 14,
+    description: '3/4-day from Point Loma targeting yellowtail and bass at the Islands.',
+    targetSpecies: ['yellowtail', 'calico bass', 'white seabass'],
+  },
+  // Helgren's — Helgren's 95 half day daily
+  {
+    boatName: "Helgren's 95", landing: 'helgrens', dayOfWeek: [0,1,2,3,4,5,6],
+    departureTime: '6:30 AM', duration: '1/2 Day AM', durationHours: 5,
+    pricePerPerson: 65, maxAnglers: 60, spotsLeft: 28,
+    description: 'Morning half-day from Oceanside targeting local bass and rockfish.',
+    targetSpecies: ['calico bass', 'rockfish', 'barracuda', 'sculpin'],
+  },
+];
+
+/**
+ * Generate trips for a date range based on weekly templates.
+ * startIso/endIso are inclusive ISO date strings e.g. '2026-04-10'.
+ */
+function generateWeeklyTrips(startIso: string, endIso: string): ScheduledTrip[] {
+  const result: ScheduledTrip[] = [];
+  const start = new Date(startIso + 'T12:00:00');
+  const end = new Date(endIso + 'T12:00:00');
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    const iso = d.toISOString().split('T')[0];
+    const dayNum = iso.replace(/-/g, '').slice(4); // "0410"
+
+    for (const tpl of WEEKLY_TEMPLATES) {
+      if (!tpl.dayOfWeek.includes(dow)) continue;
+
+      // Slight randomization of spots left so it feels real
+      const spotsVariance = Math.floor(Math.random() * 8) - 3;
+      const spots = Math.max(2, Math.min(tpl.maxAnglers - 5, tpl.spotsLeft + spotsVariance));
+
+      const trip: ScheduledTrip = {
+        id: `gen-${tpl.boatName.toLowerCase().replace(/[^a-z0-9]/g, '')}-${dayNum}-${tpl.duration.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+        boatName: tpl.boatName,
+        landing: tpl.landing,
+        departureDate: iso,
+        departureTime: tpl.departureTime,
+        duration: tpl.duration,
+        durationHours: tpl.durationHours,
+        pricePerPerson: tpl.pricePerPerson,
+        maxAnglers: tpl.maxAnglers,
+        spotsLeft: spots,
+        description: tpl.description,
+        targetSpecies: [...tpl.targetSpecies],
+      };
+
+      if (tpl.mmsi) trip.mmsi = tpl.mmsi;
+      if (tpl.charterType) trip.charterType = tpl.charterType;
+      if (tpl.operator) trip.operator = tpl.operator;
+      if (tpl.maxPassengers) trip.maxPassengers = tpl.maxPassengers;
+      if (tpl.privateBoatRate) trip.privateBoatRate = tpl.privateBoatRate;
+
+      result.push(trip);
+    }
+  }
+
+  return result;
+}
+
+// Add generated trips from April 10 through May 31 (after hand-curated dates end)
+const GENERATED_TRIPS = generateWeeklyTrips('2026-04-10', '2026-05-31');
+TRIP_SCHEDULE.push(...GENERATED_TRIPS);
+
+// ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
 
