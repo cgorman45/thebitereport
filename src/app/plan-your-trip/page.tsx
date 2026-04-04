@@ -294,6 +294,7 @@ export default function PlanYourTripPage() {
               departureCity={departureCity}
               onDepartureCityChange={setDepartureCity}
               onSearch={handleSearch}
+              trips={allTrips}
             />
           </div>
         </div>
