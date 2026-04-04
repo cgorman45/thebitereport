@@ -12,7 +12,7 @@ Add user authentication and a boat favorites system to The Bite Report. Users ca
 
 **UI pattern**: Modal overlay triggered by a "Sign In" button in the header — not a separate page. The modal shows social login buttons at top, email/password form below, with a toggle between Sign In and Sign Up.
 
-**Logged-in state**: The header "Sign In" button is replaced by an avatar circle showing user initials. A "My Boats" nav link appears in the navigation bar. Clicking the avatar opens a dropdown with: display name/email, My Boats link, Settings link, and Sign Out.
+**Logged-in state**: The header "Sign In" button is replaced by an avatar circle showing user initials (derived from `display_name`, falling back to email). A "My Boats" nav link appears in the navigation bar. Clicking the avatar opens a dropdown with: display name/email, My Boats link, and Sign Out. (Settings page is out of scope for this iteration — no dead link in the dropdown.)
 
 ## Database Schema
 
@@ -29,6 +29,8 @@ Extends Supabase's built-in `auth.users`.
 | `created_at` | TIMESTAMPTZ | |
 
 RLS: SELECT and UPDATE where `auth.uid() = id`.
+
+**Row creation**: A Supabase database trigger (`on auth.users INSERT`) automatically creates a `profiles` row for each new user, setting `display_name` from the user's email prefix or OAuth display name.
 
 ### `boat_favorites`
 
@@ -56,7 +58,9 @@ Tracks specific trips a user is watching for availability alerts.
 | `trip_id` | TEXT | Matches `ScheduledTrip.id` |
 | `boat_name` | TEXT | Denormalized for display |
 | `trip_date` | DATE | |
-| `notified_at` | TIMESTAMPTZ | NULL until alert sent |
+| `last_known_spots` | INT | NULL initially, updated by cron to track availability changes |
+| `notified_selling_out_at` | TIMESTAMPTZ | NULL until "selling out" alert sent |
+| `notified_spots_opened_at` | TIMESTAMPTZ | NULL until "spots opened" alert sent |
 | `created_at` | TIMESTAMPTZ | |
 
 Constraints: `UNIQUE(user_id, trip_id)`.
@@ -83,7 +87,7 @@ Supabase client handles auth directly — no custom API routes needed for login/
 
 **`POST /api/trip-watches`** — Body: `{ tripId: string, boatName: string, tripDate: string }`. Adds a trip watch. Requires auth.
 
-**`DELETE /api/trip-watches/[tripId]`** — Removes a trip watch. Requires auth.
+**`DELETE /api/trip-watches/[tripId]`** — Removes a trip watch. Requires auth. Trip IDs may contain special characters (e.g., `gen-newsea-0418-12dayam`) — URL-encode when constructing the request path.
 
 ## Client-Side State
 
@@ -108,7 +112,7 @@ The favorites and trip watches sets are fetched once on login and kept in memory
 
 **`AuthModal`** (`src/components/auth/AuthModal.tsx`) — Full-screen modal overlay with Sign In / Sign Up form. Social login buttons (Google, Apple) at top, email/password below. Dark marine theme matching site.
 
-**`UserMenu`** (`src/components/auth/UserMenu.tsx`) — Avatar circle with initials dropdown. Shows display name, email, links to My Boats and Settings, Sign Out button.
+**`UserMenu`** (`src/components/auth/UserMenu.tsx`) — Avatar circle with initials dropdown (initials derived from `display_name`, falling back to email). Shows display name, email, link to My Boats, and Sign Out button.
 
 **`FavoriteButton`** (`src/components/auth/FavoriteButton.tsx`) — Star toggle (★/☆) for boat following. Takes `mmsi` prop. Shows filled gold star when favorited, hollow gray when not. If user is not logged in, clicking opens the auth modal.
 
@@ -122,11 +126,11 @@ The favorites and trip watches sets are fetched once on login and kept in memory
 
 **`Header`** (`src/components/Header.tsx`) — Add "Sign In" button (logged out) or `UserMenu` avatar (logged in). Show "My Boats" nav link when logged in.
 
-**`TripResults`** (trip result cards in Plan Trip) — Add `FavoriteButton` next to boat name. Add `WatchTripButton` in trip details row. Show green "FOLLOWING" badge on favorited boats.
+**`TripResults`** (`src/components/trip-planner/TripResults.tsx`) — Add `FavoriteButton` next to boat name. Add `WatchTripButton` in trip details row. Show green "FOLLOWING" badge on favorited boats.
 
-**`CatchReportsPanel`** (`src/components/CatchReportsPanel.tsx`) — Sort favorited boat reports to top. Add gold left-border accent and filled star on favorited boats. Add hollow star on unfavorited boats.
+**`CatchReportsPanel`** (`src/components/CatchReportsPanel.tsx`) — Sort favorited boat reports to top. Add gold left-border accent and filled star on favorited boats. Add hollow star on unfavorited boats. Note: this panel currently uses sample/scraped data from the in-memory cache — favorites integration works on whatever data the panel displays.
 
-**Fleet Map popups** — Add gold star and "FOLLOWING" badge on favorited boats in map popups.
+**Fleet Map popups** (`src/components/fleet-tracker/BoatPopup.tsx`) — Add gold star and "FOLLOWING" badge on favorited boats in map popups. `BoatPopup` needs access to the favorites set via the `AuthProvider` context. The fleet-tracker page components that render `BoatPopup` must be client components to access context.
 
 ## My Boats Page
 
@@ -175,15 +179,18 @@ The existing daily cron job (`/api/cron/scrape`) is extended with a notification
 
 ### Logic
 
-For each row in `trip_watches` where `notified_at IS NULL` and `trip_date >= today`:
+For each row in `trip_watches` where `trip_date >= today`:
 
 1. Look up the matching trip from the scraper/schedule data
-2. If `spotsLeft <= 5`: send "selling out" email, set `notified_at`
-3. If trip was previously full (`spotsLeft = 0` on last check) and now `spotsLeft > 0`: send "spots opened" email, set `notified_at`
+2. Update `last_known_spots` with the current `spotsLeft` value
+3. **Selling out alert**: If `spotsLeft <= 5` and `notified_selling_out_at IS NULL`, send "selling out" email and set `notified_selling_out_at`
+4. **Spots opened alert**: If `last_known_spots` was 0 (previous cron run) and now `spotsLeft > 0` and `notified_spots_opened_at IS NULL`, send "spots opened" email and set `notified_spots_opened_at`
+
+This gives users up to two notifications per watched trip: one when it's almost full, and one if spots reopen after selling out.
 
 ### Email Delivery
 
-Use Resend (free tier: 100 emails/day) or Supabase Edge Functions with a transactional email provider. Simple HTML email with:
+Use Resend (`resend` npm package, free tier: 100 emails/day). Resend is called directly from the cron API route — no Supabase Edge Functions needed. Requires a `RESEND_API_KEY` environment variable. Simple HTML email with:
 
 - Subject: "🎣 [Boat Name] — [Trip Date] is almost full!"
 - Body: Boat name, trip date, duration, spots remaining, link to Plan Trip page
