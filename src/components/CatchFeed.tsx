@@ -59,7 +59,7 @@ const FILTER_TABS: { key: LandingFilter; label: string }[] = [
 // ---------------------------------------------------------------------------
 
 function getRelativeDate(iso: string): string {
-  const today = new Date('2026-04-02');
+  const today = new Date();
   const d = new Date(iso);
   const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
   if (diff === 0) return 'Today';
