@@ -251,10 +251,14 @@ async function flushPositionBuffer() {
         }
       }
       for (const [tripId, count] of Object.entries(tripCounts)) {
-        await supabase.rpc('increment_trip_points', { trip_uuid: tripId, amount: count })
-          .catch(() => {
-            supabase.from('trips').update({ point_count: count }).eq('id', tripId).catch(() => {});
-          });
+        try {
+          const { error: rpcErr } = await supabase.rpc('increment_trip_points', { trip_uuid: tripId, amount: count });
+          if (rpcErr) {
+            await supabase.from('trips').update({ point_count: count }).eq('id', tripId);
+          }
+        } catch {
+          // RPC may not exist yet — skip silently
+        }
       }
     }
   } catch (err) {
