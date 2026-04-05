@@ -9,9 +9,9 @@ import { useOptionalAuth } from '@/components/auth/AuthProvider';
 
 // Booking URLs for each landing
 const BOOKING_URLS: Record<string, string> = {
-  seaforth: 'https://seaforthlanding.com/schedule',
-  fishermans: 'https://fishermanslanding.com/schedule',
-  hm_landing: 'https://www.hmlanding.com/book-a-trip/',
+  seaforth: 'https://seaforth.fishingreservations.net/sales/',
+  fishermans: 'https://fishermanslanding.fishingreservations.net/resos/',
+  hm_landing: 'https://www.hmlanding.com/trip-calendar',
   point_loma: 'https://pointloma.fishingreservations.net/sales/',
   helgrens: 'https://helgrensportfishing.com/',
   private_charter: '#', // Private charters book directly with operator
