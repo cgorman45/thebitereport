@@ -23,6 +23,7 @@ interface Trip {
   endedAt: string | null;
   duration: string;
   pointCount: number;
+  hasCatchReport: boolean | null; // null = still active
   positions: TripPosition[];
 }
 
@@ -524,6 +525,22 @@ export default function BoatTripModal({ mmsi, onClose }: BoatTripModalProps) {
                   </span>
                   {!trip.endedAt && (
                     <span style={{ color: '#22c55e', marginLeft: '4px' }}>Active</span>
+                  )}
+                  {trip.endedAt && trip.hasCatchReport === false && (
+                    <span
+                      style={{
+                        marginLeft: '6px',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        color: '#f97316',
+                        backgroundColor: '#f9731615',
+                        border: '1px solid #f9731633',
+                      }}
+                    >
+                      No Report
+                    </span>
                   )}
                 </span>
               </div>

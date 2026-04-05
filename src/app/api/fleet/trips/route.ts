@@ -5,12 +5,13 @@ import { NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { getFleetBoat } from '@/lib/fleet/boats';
 import { withCache } from '@/lib/cache';
+import { scrape976Tuna } from '@/lib/scraper/parsers/tuna976';
 
 /**
  * GET /api/fleet/trips?mmsi=367703230&limit=1
  *
- * Returns the last N trips for a boat, including the route positions
- * and current real-time position (from the AIS collector).
+ * Returns the last N trips for a boat, including the route positions,
+ * current real-time position, and catch report match status.
  *
  * Response:
  * {
@@ -18,7 +19,7 @@ import { withCache } from '@/lib/cache';
  *   currentPosition: { lat, lng, speed, heading, timestamp } | null,
  *   trips: [
  *     {
- *       id, startedAt, endedAt, duration, pointCount,
+ *       id, startedAt, endedAt, duration, pointCount, hasCatchReport,
  *       positions: [{ lat, lng, speed, heading, recordedAt }]
  *     }
  *   ]
@@ -52,17 +53,22 @@ export async function GET(request: NextRequest) {
       }
     : { name: `Vessel ${mmsi}`, mmsi, landing: 'unknown', vesselType: null, photo: null };
 
-  // Fetch current position from AIS collector
-  const currentPosition = await getCurrentPosition(mmsi);
+  // Fetch trips + catch reports in parallel
+  const [currentPosition, trips, catchReports] = await Promise.all([
+    getCurrentPosition(mmsi),
+    withCache(`fleet-trips:${mmsi}:${limit}`, 60, () => fetchTrips(mmsi, limit)),
+    withCache('catch-reports:976tuna', 3600, () => scrape976Tuna()),
+  ]);
 
-  // Fetch trips from Supabase (cached 60s)
-  const trips = await withCache(
-    `fleet-trips:${mmsi}:${limit}`,
-    60,
-    () => fetchTrips(mmsi, limit),
-  );
+  // Cross-reference completed trips with catch reports
+  const tripsWithReports = trips.map((trip: TripResult) => ({
+    ...trip,
+    hasCatchReport: trip.endedAt
+      ? matchesCatchReport(boat.name, trip.startedAt, trip.endedAt, catchReports)
+      : null, // null = trip still active, not applicable yet
+  }));
 
-  return Response.json({ boat, currentPosition, trips });
+  return Response.json({ boat, currentPosition, trips: tripsWithReports });
 }
 
 // ---------------------------------------------------------------------------
@@ -104,12 +110,43 @@ interface TripRow {
   point_count: number;
 }
 
+interface TripResult {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  duration: string;
+  pointCount: number;
+  positions: { lat: number; lng: number; speed: number; heading: number; recordedAt: string }[];
+}
+
 interface PositionRow {
   lat: number;
   lng: number;
   speed: number;
   heading: number;
   recorded_at: string;
+}
+
+// Check if a completed trip has a matching catch report from 976-tuna
+function matchesCatchReport(
+  boatName: string,
+  startedAt: string,
+  endedAt: string,
+  catchReports: { boat: string; date: string }[],
+): boolean {
+  const lowerName = boatName.toLowerCase();
+  const tripStart = new Date(startedAt);
+  const tripEnd = new Date(endedAt);
+
+  // A trip matches if there's a catch report for the same boat
+  // on the departure date or return date (covers overnight trips)
+  const startDate = tripStart.toISOString().slice(0, 10);
+  const endDate = tripEnd.toISOString().slice(0, 10);
+
+  return catchReports.some((report) => {
+    if (report.boat.toLowerCase() !== lowerName) return false;
+    return report.date === startDate || report.date === endDate;
+  });
 }
 
 function formatDuration(startIso: string, endIso: string | null): string {
