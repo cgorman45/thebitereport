@@ -104,14 +104,168 @@ export default function FleetMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<Map<number, L.Marker>>(new Map());
 
+  // Trip trail layers on the main map
+  const trailLineRef = useRef<L.Polyline | null>(null);
+  const trailMarkersRef = useRef<L.Layer[]>([]);
+  const trailRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const trailMmsiRef = useRef<number | null>(null);
+
   const [boats, setBoats] = useState<Map<number, TrackedBoat>>(new Map());
   const [connectionStatus, setConnectionStatus] = useState<string>('disconnected');
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [selectedMmsi, setSelectedMmsi] = useState<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [trailLoading, setTrailLoading] = useState(false);
 
   // Ref to hold mutable boats state for the WebSocket callback
   const boatsRef = useRef<Map<number, TrackedBoat>>(new Map());
+
+  // Clear trip trail from the map
+  const clearTrail = useCallback(() => {
+    if (trailLineRef.current) {
+      trailLineRef.current.remove();
+      trailLineRef.current = null;
+    }
+    trailMarkersRef.current.forEach((layer) => layer.remove());
+    trailMarkersRef.current = [];
+    if (trailRefreshRef.current) {
+      clearInterval(trailRefreshRef.current);
+      trailRefreshRef.current = null;
+    }
+    trailMmsiRef.current = null;
+  }, []);
+
+  // Fetch and draw trip trail for a boat
+  const fetchAndDrawTrail = useCallback(async (mmsi: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    setTrailLoading(true);
+
+    try {
+      const res = await fetch(`/api/fleet/trips?mmsi=${mmsi}&limit=1`);
+      if (!res.ok) return;
+
+      const json = await res.json();
+      const trip = json.trips?.[0];
+      if (!trip || !trip.positions || trip.positions.length < 2) {
+        setTrailLoading(false);
+        return;
+      }
+
+      // Don't draw if selection changed while fetching
+      if (trailMmsiRef.current !== mmsi) {
+        setTrailLoading(false);
+        return;
+      }
+
+      // Clear any previous trail layers (but keep trailMmsiRef)
+      if (trailLineRef.current) {
+        trailLineRef.current.remove();
+        trailLineRef.current = null;
+      }
+      trailMarkersRef.current.forEach((layer) => layer.remove());
+      trailMarkersRef.current = [];
+
+      // Build polyline coordinates
+      const latLngs: L.LatLngExpression[] = trip.positions.map(
+        (p: { lat: number; lng: number }) => [p.lat, p.lng] as L.LatLngExpression
+      );
+
+      // Extend trail to boat's current live position (bridges gap between DB and real-time)
+      const boat = boatsRef.current.get(mmsi);
+      if (boat) {
+        latLngs.push([boat.lat, boat.lng]);
+      }
+
+      const trailColor = boat ? STATUS_COLORS[boat.status] : '#00d4ff';
+
+      // Main trail line
+      const polyline = L.polyline(latLngs, {
+        color: trailColor,
+        weight: 2.5,
+        opacity: 0.7,
+        smoothFactor: 1,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map);
+
+      trailLineRef.current = polyline;
+
+      // Faded shadow line underneath for depth
+      const shadow = L.polyline(latLngs, {
+        color: trailColor,
+        weight: 6,
+        opacity: 0.15,
+        smoothFactor: 1,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map);
+      trailMarkersRef.current.push(shadow);
+
+      // Departure marker (green circle at start)
+      const startPos = trip.positions[0];
+      const startCircle = L.circleMarker([startPos.lat, startPos.lng], {
+        radius: 5,
+        color: '#22c55e',
+        fillColor: '#22c55e',
+        fillOpacity: 0.9,
+        weight: 2,
+      }).addTo(map);
+      startCircle.bindTooltip(
+        `<strong>Departed</strong><br/>${new Date(trip.startedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
+        { direction: 'top', offset: [0, -8], className: 'fleet-tooltip' }
+      );
+      trailMarkersRef.current.push(startCircle);
+
+      // If trip is ended, add return marker
+      if (trip.endedAt) {
+        const endPos = trip.positions[trip.positions.length - 1];
+        const endCircle = L.circleMarker([endPos.lat, endPos.lng], {
+          radius: 5,
+          color: '#ef4444',
+          fillColor: '#ef4444',
+          fillOpacity: 0.9,
+          weight: 2,
+        }).addTo(map);
+        endCircle.bindTooltip(
+          `<strong>Returned</strong><br/>${new Date(trip.endedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
+          { direction: 'top', offset: [0, -8], className: 'fleet-tooltip' }
+        );
+        trailMarkersRef.current.push(endCircle);
+      }
+    } catch {
+      // Silently fail — trail is a nice-to-have
+    } finally {
+      setTrailLoading(false);
+    }
+  }, []);
+
+  // When selectedMmsi changes, manage trail display
+  useEffect(() => {
+    clearTrail();
+
+    if (!selectedMmsi) return;
+
+    const boat = boatsRef.current.get(selectedMmsi);
+    // Only show trail for boats that are not in port
+    if (boat && boat.status === 'in_port') return;
+
+    // Fetch trail for the selected boat
+    trailMmsiRef.current = selectedMmsi;
+    fetchAndDrawTrail(selectedMmsi);
+
+    // Refresh trail every 60s while the boat is selected (picks up new positions)
+    trailRefreshRef.current = setInterval(() => {
+      if (trailMmsiRef.current === selectedMmsi) {
+        fetchAndDrawTrail(selectedMmsi);
+      }
+    }, 60_000);
+
+    return () => {
+      clearTrail();
+    };
+  }, [selectedMmsi, clearTrail, fetchAndDrawTrail]);
 
   // Update or create a Leaflet marker for a boat
   const updateMarker = useCallback((boat: TrackedBoat) => {
@@ -213,6 +367,16 @@ export default function FleetMap() {
     setBoats(newBoats);
     setLastUpdate(now);
     updateMarker(tracked);
+
+    // Extend trail polyline to follow the boat's live position
+    if (trailLineRef.current && trailMmsiRef.current === mmsi) {
+      const latlngs = trailLineRef.current.getLatLngs() as L.LatLng[];
+      if (latlngs.length > 0) {
+        // Replace the last point (which is the live position extension)
+        latlngs[latlngs.length - 1] = L.latLng(lat, lng);
+        trailLineRef.current.setLatLngs(latlngs);
+      }
+    }
   }, [updateMarker]);
 
   // Initialize map
@@ -260,6 +424,11 @@ export default function FleetMap() {
 
   // Handle boat selection from sidebar
   const handleSelectBoat = useCallback((mmsi: number) => {
+    // Toggle off if already selected
+    if (mmsi === selectedMmsi) {
+      setSelectedMmsi(null);
+      return;
+    }
     setSelectedMmsi(mmsi);
     const boat = boatsRef.current.get(mmsi);
     if (boat && mapRef.current) {
@@ -269,10 +438,11 @@ export default function FleetMap() {
         setTimeout(() => marker.openPopup(), 500);
       }
     }
-  }, []);
+  }, [selectedMmsi]);
 
-  // Recenter
+  // Recenter — also clears selection
   const handleRecenter = useCallback(() => {
+    setSelectedMmsi(null);
     mapRef.current?.flyTo([32.71, -117.23], 11, { duration: 1 });
   }, []);
 
@@ -394,6 +564,44 @@ export default function FleetMap() {
             {isFullscreen ? '⊟' : '⊞'}
           </button>
         </div>
+
+        {/* Trip trail indicator */}
+        {selectedMmsi && trailMmsiRef.current === selectedMmsi && (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-[1000] md:bottom-4 md:left-auto md:right-4 md:translate-x-0">
+            <div
+              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-lg"
+              style={{
+                backgroundColor: '#131b2eee',
+                border: '1px solid #1e2a42',
+                color: '#e2e8f0',
+              }}
+            >
+              {trailLoading ? (
+                <>
+                  <span className="inline-block h-2 w-2 rounded-full bg-cyan-400 animate-pulse" />
+                  Loading trail...
+                </>
+              ) : (
+                <>
+                  <span className="inline-block h-2 w-6 rounded" style={{ backgroundColor: STATUS_COLORS[boatsRef.current.get(selectedMmsi)?.status || 'unknown'], opacity: 0.7 }} />
+                  <span>Trip trail</span>
+                  <span style={{ color: '#22c55e' }}>
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 mr-0.5" style={{ verticalAlign: 'middle' }} />
+                    Dept.
+                  </span>
+                  <button
+                    onClick={() => setSelectedMmsi(null)}
+                    className="ml-1 hover:text-white transition-colors"
+                    style={{ color: '#8899aa' }}
+                    title="Clear trail"
+                  >
+                    ×
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Legend */}
         <MapLegend />
