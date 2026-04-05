@@ -7,6 +7,7 @@ import type { User, AuthError } from '@supabase/supabase-js';
 interface Profile {
   id: string;
   display_name: string | null;
+  avatar_key: string | null;
 }
 
 interface AuthContextType {
@@ -53,7 +54,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       const [favRes, watchRes, profileRes] = await Promise.all([
         fetch('/api/favorites', { headers: { Authorization: `Bearer ${accessToken}` } }),
         fetch('/api/trip-watches', { headers: { Authorization: `Bearer ${accessToken}` } }),
-        getSupabase().from('profiles').select('id, display_name').single(),
+        getSupabase().from('profiles').select('id, display_name, avatar_key').single(),
       ]);
 
       if (favRes.ok) {
