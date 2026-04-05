@@ -22,7 +22,7 @@ export const FLEET_ROSTER: FleetBoat[] = [
   { name: 'Islander', mmsi: 338312000, landing: 'fishermans', vesselType: 'Multi-Day', photo: 'islander' },
   { name: 'Pacific Queen', mmsi: 367438790, landing: 'fishermans', vesselType: 'Overnight', photo: 'pacific-queen' },
   { name: 'Excel', mmsi: 367469480, landing: 'fishermans', vesselType: 'Multi-Day', photo: 'excel' },
-  { name: 'Constitution', mmsi: 367516650, landing: 'fishermans', vesselType: 'Full Day', photo: 'constitution' },
+  { name: 'Constitution', mmsi: 368352260, landing: 'fishermans', vesselType: 'Full Day', photo: 'constitution' },
   { name: 'Pegasus', mmsi: 367612350, landing: 'fishermans', vesselType: '3/4 Day', photo: 'pegasus' },
 
   // H&M Landing (Point Loma)
@@ -32,7 +32,7 @@ export const FLEET_ROSTER: FleetBoat[] = [
   { name: 'Shogun', mmsi: 367469500, landing: 'hm_landing', vesselType: 'Multi-Day' },
   { name: 'Grande', mmsi: 0, landing: 'hm_landing', vesselType: 'Full Day', photo: 'grande' },
   { name: 'Malihini', mmsi: 0, landing: 'hm_landing', vesselType: '3/4 Day', photo: 'malihini' },
-  { name: 'Spirit of Adventure', mmsi: 367703300, landing: 'hm_landing', vesselType: 'Full Day', photo: 'spirit-of-adventure' },
+  { name: 'Spirit of Adventure', mmsi: 367185130, landing: 'hm_landing', vesselType: 'Full Day', photo: 'spirit-of-adventure' },
 
   // Point Loma Sportfishing
   { name: 'Point Loma', mmsi: 367710500, landing: 'point_loma', vesselType: 'Full Day', photo: 'point-loma' },

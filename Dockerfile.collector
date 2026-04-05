@@ -1,0 +1,10 @@
+FROM node:20-slim
+WORKDIR /app
+
+# Install only the dependencies the collector needs
+RUN npm init -y && npm install ws@8 @supabase/supabase-js@2
+
+# Copy the collector script
+COPY scripts/ais-collector.mjs .
+
+CMD ["node", "ais-collector.mjs"]
