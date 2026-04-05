@@ -332,7 +332,17 @@ export default function CatchFeed() {
       .then((r) => r.json())
       .then((data: CatchEntry[]) => {
         if (Array.isArray(data) && data.length > 0) {
-          setTimeout(() => setLiveData(data), 0);
+          // Auto-highlight exceptional catches
+          const PREMIUM_SPECIES = ['bluefin tuna', 'yellowfin tuna', 'yellowtail', 'white seabass', 'dorado'];
+          const highlighted = data.map((entry) => {
+            const perRod = entry.anglers > 0 ? entry.count / entry.anglers : 0;
+            const isPremium = PREMIUM_SPECIES.includes(entry.species.toLowerCase());
+            return {
+              ...entry,
+              highlight: isPremium || perRod >= 3,
+            };
+          });
+          setTimeout(() => setLiveData(highlighted), 0);
         }
       })
       .catch(() => {/* use fallback */})

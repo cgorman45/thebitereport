@@ -5,11 +5,15 @@
  *   1. .ais-positions.json (real-time fleet map, existing behavior)
  *   2. Supabase positions table (persistent trip history)
  *
+ * Dynamically tracks only boats that appear in 976-tuna.com catch reports.
+ * Refreshes the active boat list every 4 hours from the deployed API.
+ *
  * Also detects trip boundaries (departure from / return to port)
  * and maintains trip records in Supabase.
  *
  * Usage: node scripts/ais-collector.mjs
  * Env:   AIS_API_KEY, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ *        SITE_URL (optional, defaults to https://thebitereport.vercel.app)
  */
 
 import WebSocket from 'ws';
@@ -38,6 +42,9 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseEnabled = !!(SUPABASE_URL && SUPABASE_KEY);
 
+const SITE_URL = process.env.SITE_URL || 'https://thebitereport.vercel.app';
+const REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
 let supabase = null;
 if (supabaseEnabled) {
   supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -47,49 +54,134 @@ if (supabaseEnabled) {
 }
 
 // ---------------------------------------------------------------------------
-// Fleet roster & port coordinates (mirrored from src/lib/fleet/boats.ts)
-// Keep in sync with the source file.
+// Full fleet roster (static fallback)
+// Used for name/landing lookups and as a fallback if the API is unreachable.
 // ---------------------------------------------------------------------------
 
-const FLEET_MMSIS = new Set([
-  367703230, 367478120, 338409157, 367547700, 367004700, 367739800,
-  366918840, 367710460, 367523170, // Seaforth
-  367469470, 367453390, 367678200, 367672130, 338312000, 367438790,
-  367469480, 367516650, 367612350, // Fisherman's
-  367438800, 367516700, 367547800, 367469500, 367703300, // H&M
-  367710500, 367523200, 367478200, 367612400, // Point Loma
-  367672200, 367739900, 367004800, // Helgren's
-]);
-
-// MMSI → landing key
-const MMSI_LANDING = {
-  367703230: 'seaforth', 367478120: 'seaforth', 338409157: 'seaforth',
-  367547700: 'seaforth', 367004700: 'seaforth', 367739800: 'seaforth',
-  366918840: 'seaforth', 367710460: 'seaforth', 367523170: 'seaforth',
-  367469470: 'fishermans', 367453390: 'fishermans', 367678200: 'fishermans',
-  367672130: 'fishermans', 338312000: 'fishermans', 367438790: 'fishermans',
-  367469480: 'fishermans', 367516650: 'fishermans', 367612350: 'fishermans',
-  367438800: 'hm_landing', 367516700: 'hm_landing', 367547800: 'hm_landing',
-  367469500: 'hm_landing', 367703300: 'hm_landing',
-  367710500: 'point_loma', 367523200: 'point_loma', 367478200: 'point_loma',
-  367612400: 'point_loma',
-  367672200: 'helgrens', 367739900: 'helgrens', 367004800: 'helgrens',
+const FULL_ROSTER = {
+  367703230: { name: 'New Seaforth', landing: 'seaforth' },
+  367478120: { name: 'Apollo', landing: 'seaforth' },
+  338409157: { name: 'Aztec', landing: 'seaforth' },
+  367547700: { name: 'Cortez', landing: 'seaforth' },
+  367004700: { name: 'Highliner', landing: 'seaforth' },
+  367739800: { name: 'Legacy', landing: 'seaforth' },
+  366918840: { name: 'San Diego', landing: 'seaforth' },
+  367710460: { name: 'Sea Watch', landing: 'seaforth' },
+  367523170: { name: 'El Gato Dos', landing: 'seaforth' },
+  367188060: { name: 'Voyager', landing: 'seaforth' },
+  367469470: { name: 'Polaris Supreme', landing: 'fishermans' },
+  367453390: { name: 'Dolphin', landing: 'fishermans' },
+  367678200: { name: 'Liberty', landing: 'fishermans' },
+  367672130: { name: 'Fortune', landing: 'fishermans' },
+  338312000: { name: 'Islander', landing: 'fishermans' },
+  367438790: { name: 'Pacific Queen', landing: 'fishermans' },
+  367469480: { name: 'Excel', landing: 'fishermans' },
+  367516650: { name: 'Constitution', landing: 'fishermans' },
+  367612350: { name: 'Pegasus', landing: 'fishermans' },
+  367438800: { name: 'Mission Belle', landing: 'hm_landing' },
+  367516700: { name: 'Patriot', landing: 'hm_landing' },
+  367547800: { name: 'Daily Double', landing: 'hm_landing' },
+  367469500: { name: 'Shogun', landing: 'hm_landing' },
+  367703300: { name: 'Spirit of Adventure', landing: 'hm_landing' },
+  367710500: { name: 'Point Loma', landing: 'point_loma' },
+  367523200: { name: 'New Lo-An', landing: 'point_loma' },
+  367478200: { name: 'Chubasco II', landing: 'point_loma' },
+  367612400: { name: 'Premier', landing: 'point_loma' },
+  367672200: { name: "Helgren's Oceanside 95", landing: 'helgrens' },
+  367739900: { name: 'Sea Star', landing: 'helgrens' },
+  367004800: { name: 'Oceanside 95', landing: 'helgrens' },
 };
 
-// MMSI → boat name
-const MMSI_NAME = {
-  367703230: 'New Seaforth', 367478120: 'Apollo', 338409157: 'Aztec',
-  367547700: 'Cortez', 367004700: 'Highliner', 367739800: 'Legacy',
-  366918840: 'San Diego', 367710460: 'Sea Watch', 367523170: 'El Gato Dos',
-  367469470: 'Polaris Supreme', 367453390: 'Dolphin', 367678200: 'Liberty',
-  367672130: 'Fortune', 338312000: 'Islander', 367438790: 'Pacific Queen',
-  367469480: 'Excel', 367516650: 'Constitution', 367612350: 'Pegasus',
-  367438800: 'Mission Belle', 367516700: 'Patriot', 367547800: 'Daily Double',
-  367469500: 'Shogun', 367703300: 'Spirit of Adventure',
-  367710500: 'Point Loma', 367523200: 'New Lo-An', 367478200: 'Chubasco II',
-  367612400: 'Premier',
-  367672200: "Helgren's Oceanside 95", 367739900: 'Sea Star', 367004800: 'Oceanside 95',
-};
+// ---------------------------------------------------------------------------
+// Dynamic active boat tracking
+// Only boats that appear in recent catch reports get AIS tracking.
+// ---------------------------------------------------------------------------
+
+/** Set of MMSIs to actively track — updated from catch report API */
+let activeMMSIs = new Set();
+
+/** Whether we've successfully loaded active boats at least once */
+let hasLoadedActiveBoats = false;
+
+/**
+ * Fetch the list of boats with recent catch reports from the deployed site.
+ * Updates activeMMSIs and the lookup maps accordingly.
+ */
+async function refreshActiveBoats() {
+  try {
+    const url = `${SITE_URL}/api/fleet/active-boats`;
+    console.log(`[AIS] Refreshing active boats from ${url}...`);
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+
+    if (Array.isArray(data.boats) && data.boats.length > 0) {
+      const newSet = new Set();
+      for (const boat of data.boats) {
+        newSet.add(boat.mmsi);
+        // Ensure this boat exists in FULL_ROSTER for name/landing lookups
+        if (!FULL_ROSTER[boat.mmsi]) {
+          FULL_ROSTER[boat.mmsi] = { name: boat.name, landing: boat.landing };
+        }
+      }
+
+      activeMMSIs = newSet;
+      hasLoadedActiveBoats = true;
+
+      const names = data.boats.map(b => b.name).join(', ');
+      console.log(`[AIS] Active boats (${activeMMSIs.size}): ${names}`);
+
+      if (data.unmatchedBoats?.length > 0) {
+        console.log(`[AIS] Boats in catch reports without AIS: ${data.unmatchedBoats.join(', ')}`);
+      }
+
+      // Initialize trip state for any new boats
+      for (const mmsi of activeMMSIs) {
+        if (!tripState.has(mmsi)) {
+          tripState.set(mmsi, { currentTripId: null, inPort: true, debounceCount: 0 });
+        }
+      }
+    } else {
+      console.log('[AIS] API returned no active boats — keeping previous set');
+    }
+  } catch (err) {
+    console.error(`[AIS] Failed to refresh active boats: ${err.message}`);
+
+    // On first load failure, fall back to full fleet
+    if (!hasLoadedActiveBoats) {
+      activeMMSIs = new Set(Object.keys(FULL_ROSTER).map(Number));
+      console.log(`[AIS] Falling back to full fleet (${activeMMSIs.size} boats)`);
+    }
+  }
+}
+
+/**
+ * Check if an MMSI should be tracked.
+ * Returns true if the boat is in the active set.
+ */
+function isTrackedBoat(mmsi) {
+  return activeMMSIs.has(mmsi);
+}
+
+/**
+ * Get the landing key for a given MMSI.
+ */
+function getLanding(mmsi) {
+  return FULL_ROSTER[mmsi]?.landing || 'unknown';
+}
+
+/**
+ * Get the boat name for a given MMSI.
+ */
+function getBoatName(mmsi) {
+  return FULL_ROSTER[mmsi]?.name || `Vessel ${mmsi}`;
+}
+
+// ---------------------------------------------------------------------------
+// Port coordinates & helpers
+// ---------------------------------------------------------------------------
 
 const PORTS = {
   seaforth:   { lat: 32.7137, lng: -117.2275 },
@@ -100,10 +192,6 @@ const PORTS = {
 };
 
 const PORT_RADIUS_M = 925; // 0.5 nautical miles
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function haversineDistance(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -122,7 +210,7 @@ function isInPortZone(lat, lng, landing) {
 }
 
 // ---------------------------------------------------------------------------
-// State: real-time positions (existing) + trip tracking (new)
+// State: real-time positions + trip tracking
 // ---------------------------------------------------------------------------
 
 const positions = new Map();
@@ -130,14 +218,13 @@ let messageCount = 0;
 let connected = false;
 
 // Trip state per boat: { currentTripId, inPort, debounceCount }
-// debounceCount: consecutive reports in new zone before we commit the transition
 const tripState = new Map();
 const DEBOUNCE_THRESHOLD = 3; // 3 consecutive reports (~45s)
 
 // Insert buffer — batch positions for efficient writes
 const insertBuffer = [];
-const FLUSH_INTERVAL_MS = 30_000;  // flush every 30 seconds
-const MAX_BUFFER_SIZE = 50;        // or when buffer hits 50 items
+const FLUSH_INTERVAL_MS = 30_000;
+const MAX_BUFFER_SIZE = 50;
 
 // ---------------------------------------------------------------------------
 // Supabase: restore active trips on startup
@@ -165,8 +252,8 @@ async function restoreActiveTrips() {
       console.log(`[AIS] Restored active trip ${trip.id} for MMSI ${trip.mmsi}`);
     }
 
-    // Initialize remaining fleet boats as "in port"
-    for (const mmsi of FLEET_MMSIS) {
+    // Initialize tracked boats as "in port"
+    for (const mmsi of activeMMSIs) {
       if (!tripState.has(mmsi)) {
         tripState.set(mmsi, { currentTripId: null, inPort: true, debounceCount: 0 });
       }
@@ -184,8 +271,8 @@ async function restoreActiveTrips() {
 
 async function startTrip(mmsi) {
   if (!supabase) return null;
-  const landing = MMSI_LANDING[mmsi] || 'unknown';
-  const boatName = MMSI_NAME[mmsi] || `Vessel ${mmsi}`;
+  const landing = getLanding(mmsi);
+  const boatName = getBoatName(mmsi);
 
   try {
     const { data, error } = await supabase
@@ -247,10 +334,8 @@ async function flushPositionBuffer() {
 
     if (error) {
       console.error(`[AIS] Failed to insert ${batch.length} positions:`, error.message);
-      // Put them back for retry (once)
       insertBuffer.unshift(...batch);
     } else {
-      // Update point_count for each trip
       const tripCounts = {};
       for (const pos of batch) {
         if (pos.trip_id) {
@@ -260,10 +345,9 @@ async function flushPositionBuffer() {
       for (const [tripId, count] of Object.entries(tripCounts)) {
         await supabase.rpc('increment_trip_points', { trip_uuid: tripId, amount: count })
           .catch(() => {
-            // Fallback: direct update if RPC doesn't exist
             supabase
               .from('trips')
-              .update({ point_count: count }) // Will be overwritten; see note below
+              .update({ point_count: count })
               .eq('id', tripId)
               .catch(() => {});
           });
@@ -275,14 +359,17 @@ async function flushPositionBuffer() {
 }
 
 // ---------------------------------------------------------------------------
-// Position processing: existing JSON file + new Supabase persistence
+// Position processing
 // ---------------------------------------------------------------------------
 
 function processPosition(mmsi, name, lat, lng, sog, cog, heading) {
-  // 1. Always update the real-time positions map (existing behavior)
+  // Only process positions for actively tracked boats
+  if (!isTrackedBoat(mmsi)) return;
+
+  // 1. Update the real-time positions map
   positions.set(mmsi, {
     mmsi,
-    name: name?.trim() || `Vessel ${mmsi}`,
+    name: name?.trim() || getBoatName(mmsi),
     lat,
     lng,
     sog,
@@ -291,11 +378,11 @@ function processPosition(mmsi, name, lat, lng, sog, cog, heading) {
     timestamp: Date.now(),
   });
 
-  // 2. Trip detection + Supabase persistence (new, only for fleet boats)
-  if (!supabaseEnabled || !FLEET_MMSIS.has(mmsi)) return;
+  // 2. Trip detection + Supabase persistence
+  if (!supabaseEnabled) return;
 
-  const landing = MMSI_LANDING[mmsi];
-  if (!landing) return;
+  const landing = getLanding(mmsi);
+  if (landing === 'unknown') return;
 
   let state = tripState.get(mmsi);
   if (!state) {
@@ -306,39 +393,30 @@ function processPosition(mmsi, name, lat, lng, sog, cog, heading) {
   const inPortNow = isInPortZone(lat, lng, landing);
 
   if (state.inPort && !inPortNow) {
-    // Boat was in port, now outside zone
     state.debounceCount++;
     if (state.debounceCount >= DEBOUNCE_THRESHOLD) {
-      // Confirmed departure
       state.inPort = false;
       state.debounceCount = 0;
       startTrip(mmsi).then(tripId => {
         if (tripId) state.currentTripId = tripId;
       });
     }
-    // Don't write in-port positions while debouncing
     return;
   } else if (!state.inPort && inPortNow) {
-    // Boat was on trip, now in port zone
     state.debounceCount++;
     if (state.debounceCount >= DEBOUNCE_THRESHOLD) {
-      // Confirmed return
-      const boatName = MMSI_NAME[mmsi] || `Vessel ${mmsi}`;
+      const boatName = getBoatName(mmsi);
       endTrip(state.currentTripId, boatName);
       state.inPort = true;
       state.currentTripId = null;
       state.debounceCount = 0;
     }
-    // Still write the position (it's part of the return leg)
   } else {
-    // No zone transition — reset debounce
     state.debounceCount = 0;
   }
 
-  // Skip recording positions for boats in port (saves storage)
   if (state.inPort) return;
 
-  // Buffer position for batch insert
   insertBuffer.push({
     mmsi,
     lat,
@@ -349,18 +427,16 @@ function processPosition(mmsi, name, lat, lng, sog, cog, heading) {
     trip_id: state.currentTripId,
   });
 
-  // Flush if buffer is full
   if (insertBuffer.length >= MAX_BUFFER_SIZE) {
     flushPositionBuffer();
   }
 }
 
 // ---------------------------------------------------------------------------
-// JSON file writer (existing behavior, unchanged)
+// JSON file writer
 // ---------------------------------------------------------------------------
 
 function writePositions() {
-  // Prune old positions (>10 min)
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const [mmsi, pos] of positions) {
     if (pos.timestamp < cutoff) positions.delete(mmsi);
@@ -369,6 +445,7 @@ function writePositions() {
   const data = {
     connected,
     count: positions.size,
+    activeBoats: activeMMSIs.size,
     totalMessages: messageCount,
     updatedAt: Date.now(),
     positions: Array.from(positions.values()),
@@ -420,8 +497,8 @@ function connect() {
         report.TrueHeading,
       );
 
-      if (messageCount % 10 === 0) {
-        console.log(`[AIS] ${messageCount} msgs, ${positions.size} vessels, ${insertBuffer.length} buffered`);
+      if (messageCount % 100 === 0) {
+        console.log(`[AIS] ${messageCount} msgs, ${positions.size} tracked, ${activeMMSIs.size} active boats, ${insertBuffer.length} buffered`);
       }
     } catch { /* skip bad messages */ }
   });
@@ -435,7 +512,6 @@ function connect() {
     console.log(`[AIS] Closed: ${code} ${reason.toString()}`);
     connected = false;
     writePositions();
-    // Flush any remaining positions before reconnect
     flushPositionBuffer();
     console.log('[AIS] Reconnecting in 5s...');
     setTimeout(connect, 5000);
@@ -446,20 +522,26 @@ function connect() {
 // Timers
 // ---------------------------------------------------------------------------
 
-// Write JSON file every 2 seconds (existing)
+// Write JSON file every 2 seconds
 setInterval(writePositions, 2000);
 
-// Flush position buffer every 30 seconds (new)
+// Flush position buffer every 30 seconds
 setInterval(flushPositionBuffer, FLUSH_INTERVAL_MS);
+
+// Refresh active boat list every 4 hours
+setInterval(refreshActiveBoats, REFRESH_INTERVAL_MS);
 
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
 
 console.log(`[AIS] Data file: ${DATA_FILE}`);
+console.log(`[AIS] Site URL: ${SITE_URL}`);
 console.log(`[AIS] Supabase: ${supabaseEnabled ? 'enabled' : 'disabled'}`);
 
-// Restore active trips then connect
-restoreActiveTrips().then(() => {
-  connect();
-});
+// 1. Load active boats from catch reports
+// 2. Restore any in-progress trips from Supabase
+// 3. Connect to AIS stream
+refreshActiveBoats()
+  .then(() => restoreActiveTrips())
+  .then(() => connect());

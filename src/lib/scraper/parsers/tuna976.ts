@@ -36,7 +36,15 @@ const SPECIES_PRIORITY: string[] = [
   'dorado',
   'calico bass',
   'barracuda',
+  'halibut',
   'lingcod',
+  'bonito',
+  'sheephead',
+  'whitefish',
+  'sand bass',
+  'sculpin',
+  'red snapper',
+  'cabezon',
   'rockfish',
 ];
 
@@ -152,7 +160,8 @@ async function scrapeLandingPage(
     }
   });
 
-  // Each boat entry lives inside a div.row.card
+  // Each boat entry lives inside a div.row.card.
+  // A single card can contain multiple trip entries (e.g. AM + PM trips).
   $('div.row.card').each((_i, card) => {
     const cardText = $(card).text();
 
@@ -164,45 +173,45 @@ async function scrapeLandingPage(
     const boat = boatAnchor.text().trim();
     if (!boat) return;
 
-    // Angler count
-    const anglerMatch = cardText.match(/with\s+(\d+)\s+anglers/i);
-    const anglers = anglerMatch ? parseInt(anglerMatch[1], 10) : 0;
+    // Match ALL trip entries in this card.
+    // Pattern: "with N anglers on a [TripType] caught [species list]."
+    // Use [\s\S] instead of . to match across newlines in card text.
+    const tripPattern =
+      /with\s+(\d+)\s+anglers\s+on\s+a\s+([\s\S]+?)\s+caught\s+([\s\S]+?)\./gi;
 
-    // Trip type: text between "on a" and "caught"
-    const tripMatch = cardText.match(/on\s+a\s+(.+?)\s+caught/i);
-    const tripType = tripMatch ? tripMatch[1].trim() : '';
+    for (const m of cardText.matchAll(tripPattern)) {
+      const anglers = parseInt(m[1], 10);
+      const tripType = m[2].trim();
+      const caughtText = m[3];
 
-    // Species counts: text after "caught"
-    const caughtMatch = cardText.match(/caught\s+([\s\S]+?)\.?\s*$/);
-    if (!caughtMatch) return;
+      const speciesCounts = parseSpeciesCounts(caughtText);
+      if (speciesCounts.length === 0) continue;
 
-    const speciesCounts = parseSpeciesCounts(caughtMatch[1]);
-    if (speciesCounts.length === 0) return;
+      // Sort by priority; ties broken by count descending
+      const sorted = [...speciesCounts].sort((a, b) => {
+        const pa = speciesPriority(a.species);
+        const pb = speciesPriority(b.species);
+        if (pa !== pb) return pa - pb;
+        return b.count - a.count;
+      });
 
-    // Sort by priority; ties broken by count descending
-    const sorted = [...speciesCounts].sort((a, b) => {
-      const pa = speciesPriority(a.species);
-      const pb = speciesPriority(b.species);
-      if (pa !== pb) return pa - pb;
-      return b.count - a.count;
-    });
+      const primary = sorted[0];
+      const also = sorted.slice(1);
 
-    const primary = sorted[0];
-    const also = sorted.slice(1);
-
-    reports.push({
-      id: crypto.randomUUID(),
-      date: pageDate,
-      boat,
-      landing,
-      tripType,
-      species: primary.species,
-      count: primary.count,
-      anglers,
-      area: '',
-      also,
-      scrapedAt,
-    });
+      reports.push({
+        id: crypto.randomUUID(),
+        date: pageDate,
+        boat,
+        landing,
+        tripType,
+        species: primary.species,
+        count: primary.count,
+        anglers,
+        area: '',
+        also,
+        scrapedAt,
+      });
+    }
   });
 
   return reports;

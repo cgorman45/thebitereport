@@ -11,6 +11,8 @@ export const FLEET_ROSTER: FleetBoat[] = [
   { name: 'San Diego', mmsi: 366918840, landing: 'seaforth', vesselType: 'Full Day', photo: 'san-diego' },
   { name: 'Sea Watch', mmsi: 367710460, landing: 'seaforth', vesselType: 'Full Day', photo: 'sea-watch' },
   { name: 'El Gato Dos', mmsi: 367523170, landing: 'seaforth', vesselType: '1/2 Day', photo: 'el-gato-dos' },
+  { name: 'Voyager', mmsi: 367188060, landing: 'seaforth', vesselType: 'Full Day' },
+  { name: 'Pacific Voyager', mmsi: 0, landing: 'seaforth', vesselType: 'Overnight' },
 
   // Fisherman's Landing
   { name: 'Polaris Supreme', mmsi: 367469470, landing: 'fishermans', vesselType: 'Multi-Day' },
@@ -42,6 +44,9 @@ export const FLEET_ROSTER: FleetBoat[] = [
   { name: 'Helgren\'s Oceanside 95', mmsi: 367672200, landing: 'helgrens', vesselType: 'Full Day' },
   { name: 'Sea Star', mmsi: 367739900, landing: 'helgrens', vesselType: '1/2 Day' },
   { name: 'Oceanside 95', mmsi: 367004800, landing: 'helgrens', vesselType: 'Overnight' },
+  { name: 'New Del Mar', mmsi: 0, landing: 'helgrens', vesselType: '1/2 Day' },
+  { name: 'Spitfire', mmsi: 0, landing: 'helgrens', vesselType: '3/4 Day' },
+  { name: 'Betty-O', mmsi: 0, landing: 'helgrens', vesselType: '3/4 Day' },
 ];
 
 // Set of known MMSIs for O(1) lookup
