@@ -6,6 +6,7 @@ type StatusHandler = (status: 'connected' | 'disconnected' | 'reconnecting' | 'e
 interface PositionData {
   mmsi: number;
   name: string;
+  landing: string;
   lat: number;
   lng: number;
   sog: number;
@@ -21,6 +22,10 @@ interface PositionResponse {
   error?: string;
 }
 
+/**
+ * Polls /api/fleet/positions (backed by Supabase fleet_positions table)
+ * and converts each row into the AISMessage format expected by FleetMap.
+ */
 export class AISStreamManager {
   private onMessage: MessageHandler;
   private onStatus: StatusHandler;
@@ -28,8 +33,6 @@ export class AISStreamManager {
   private destroyed = false;
 
   constructor(config: {
-    apiKey: string;
-    knownMmsis: number[];
     onMessage: MessageHandler;
     onStatus: StatusHandler;
   }) {
@@ -39,10 +42,8 @@ export class AISStreamManager {
 
   connect(): void {
     if (this.destroyed) return;
-    // Poll server endpoint every 15 seconds
-    // Each server request opens a fresh WebSocket to aisstream.io for ~5 seconds
     this.poll();
-    this.pollTimer = setInterval(() => this.poll(), 15000);
+    this.pollTimer = setInterval(() => this.poll(), 15_000);
   }
 
   private async poll(): Promise<void> {
@@ -81,10 +82,6 @@ export class AISStreamManager {
           },
         };
         this.onMessage(msg);
-      }
-
-      if (data.count > 0) {
-        console.log(`[AIS] Polled ${data.count} vessels`);
       }
     } catch {
       this.onStatus('error');

@@ -67,10 +67,17 @@ function getRelativeSeconds(ts: number | null): string {
 
 function matchesFilter(boat: TrackedBoat, activeFilters: Set<FilterKey>): boolean {
   if (activeFilters.has('all') || activeFilters.size === 0) return true;
-  if (activeFilters.has('seaforth') && boat.landing === 'seaforth') return true;
-  if (activeFilters.has('fishermans') && boat.landing === 'fishermans') return true;
+
+  // Landing filters
+  const landingKeys: FilterKey[] = ['seaforth', 'fishermans', 'hm_landing', 'point_loma', 'helgrens'];
+  for (const key of landingKeys) {
+    if (activeFilters.has(key) && boat.landing === key) return true;
+  }
+
+  // Status filters
   if (activeFilters.has('catching_fish') && boat.status === 'catching_fish') return true;
   if (activeFilters.has('circling') && boat.status === 'circling') return true;
+
   return false;
 }
 

@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 /**
  * AIS Data Collector — standalone background process
- * Connects to aisstream.io WebSocket and writes vessel positions to:
- *   1. .ais-positions.json (real-time fleet map, existing behavior)
- *   2. Supabase positions table (persistent trip history)
+ * Connects to aisstream.io WebSocket and writes vessel positions to Supabase:
+ *   1. fleet_positions table  — latest position per boat (real-time map)
+ *   2. positions table        — historical breadcrumbs (trip history)
+ *   3. trips table            — departure/return records
  *
  * Dynamically tracks only boats that appear in 976-tuna.com catch reports.
  * Refreshes the active boat list every 4 hours from the deployed API.
- *
- * Also detects trip boundaries (departure from / return to port)
- * and maintains trip records in Supabase.
  *
  * Usage: node scripts/ais-collector.mjs
  * Env:   AIS_API_KEY, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
@@ -17,13 +15,7 @@
  */
 
 import WebSocket from 'ws';
-import { writeFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_FILE = join(__dirname, '..', '.ais-positions.json');
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -40,22 +32,19 @@ if (!API_KEY) {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabaseEnabled = !!(SUPABASE_URL && SUPABASE_KEY);
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('Supabase credentials required. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const SITE_URL = process.env.SITE_URL || 'https://thebitereport.vercel.app';
 const REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-let supabase = null;
-if (supabaseEnabled) {
-  supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  console.log('[AIS] Supabase persistence enabled');
-} else {
-  console.log('[AIS] Supabase not configured — running without trip history');
-}
-
 // ---------------------------------------------------------------------------
-// Full fleet roster (static fallback)
-// Used for name/landing lookups and as a fallback if the API is unreachable.
+// Full fleet roster (static fallback + name/landing lookup)
 // ---------------------------------------------------------------------------
 
 const FULL_ROSTER = {
@@ -94,19 +83,11 @@ const FULL_ROSTER = {
 
 // ---------------------------------------------------------------------------
 // Dynamic active boat tracking
-// Only boats that appear in recent catch reports get AIS tracking.
 // ---------------------------------------------------------------------------
 
-/** Set of MMSIs to actively track — updated from catch report API */
 let activeMMSIs = new Set();
-
-/** Whether we've successfully loaded active boats at least once */
 let hasLoadedActiveBoats = false;
 
-/**
- * Fetch the list of boats with recent catch reports from the deployed site.
- * Updates activeMMSIs and the lookup maps accordingly.
- */
 async function refreshActiveBoats() {
   try {
     const url = `${SITE_URL}/api/fleet/active-boats`;
@@ -121,7 +102,6 @@ async function refreshActiveBoats() {
       const newSet = new Set();
       for (const boat of data.boats) {
         newSet.add(boat.mmsi);
-        // Ensure this boat exists in FULL_ROSTER for name/landing lookups
         if (!FULL_ROSTER[boat.mmsi]) {
           FULL_ROSTER[boat.mmsi] = { name: boat.name, landing: boat.landing };
         }
@@ -134,10 +114,9 @@ async function refreshActiveBoats() {
       console.log(`[AIS] Active boats (${activeMMSIs.size}): ${names}`);
 
       if (data.unmatchedBoats?.length > 0) {
-        console.log(`[AIS] Boats in catch reports without AIS: ${data.unmatchedBoats.join(', ')}`);
+        console.log(`[AIS] Boats without AIS: ${data.unmatchedBoats.join(', ')}`);
       }
 
-      // Initialize trip state for any new boats
       for (const mmsi of activeMMSIs) {
         if (!tripState.has(mmsi)) {
           tripState.set(mmsi, { currentTripId: null, inPort: true, debounceCount: 0 });
@@ -148,8 +127,6 @@ async function refreshActiveBoats() {
     }
   } catch (err) {
     console.error(`[AIS] Failed to refresh active boats: ${err.message}`);
-
-    // On first load failure, fall back to full fleet
     if (!hasLoadedActiveBoats) {
       activeMMSIs = new Set(Object.keys(FULL_ROSTER).map(Number));
       console.log(`[AIS] Falling back to full fleet (${activeMMSIs.size} boats)`);
@@ -157,27 +134,9 @@ async function refreshActiveBoats() {
   }
 }
 
-/**
- * Check if an MMSI should be tracked.
- * Returns true if the boat is in the active set.
- */
-function isTrackedBoat(mmsi) {
-  return activeMMSIs.has(mmsi);
-}
-
-/**
- * Get the landing key for a given MMSI.
- */
-function getLanding(mmsi) {
-  return FULL_ROSTER[mmsi]?.landing || 'unknown';
-}
-
-/**
- * Get the boat name for a given MMSI.
- */
-function getBoatName(mmsi) {
-  return FULL_ROSTER[mmsi]?.name || `Vessel ${mmsi}`;
-}
+function isTrackedBoat(mmsi) { return activeMMSIs.has(mmsi); }
+function getLanding(mmsi) { return FULL_ROSTER[mmsi]?.landing || 'unknown'; }
+function getBoatName(mmsi) { return FULL_ROSTER[mmsi]?.name || `Vessel ${mmsi}`; }
 
 // ---------------------------------------------------------------------------
 // Port coordinates & helpers
@@ -210,28 +169,31 @@ function isInPortZone(lat, lng, landing) {
 }
 
 // ---------------------------------------------------------------------------
-// State: real-time positions + trip tracking
+// State
 // ---------------------------------------------------------------------------
 
-const positions = new Map();
+const positions = new Map(); // latest position per boat (in-memory)
 let messageCount = 0;
 let connected = false;
 
-// Trip state per boat: { currentTripId, inPort, debounceCount }
+// Trip state per boat
 const tripState = new Map();
-const DEBOUNCE_THRESHOLD = 3; // 3 consecutive reports (~45s)
+const DEBOUNCE_THRESHOLD = 3;
 
-// Insert buffer — batch positions for efficient writes
+// Batched position history inserts
 const insertBuffer = [];
 const FLUSH_INTERVAL_MS = 30_000;
 const MAX_BUFFER_SIZE = 50;
 
+// Batched fleet_positions upserts
+const positionUpsertBuffer = new Map(); // mmsi → row
+const UPSERT_INTERVAL_MS = 5_000;
+
 // ---------------------------------------------------------------------------
-// Supabase: restore active trips on startup
+// Supabase: restore active trips
 // ---------------------------------------------------------------------------
 
 async function restoreActiveTrips() {
-  if (!supabase) return;
   try {
     const { data, error } = await supabase
       .from('trips')
@@ -252,7 +214,6 @@ async function restoreActiveTrips() {
       console.log(`[AIS] Restored active trip ${trip.id} for MMSI ${trip.mmsi}`);
     }
 
-    // Initialize tracked boats as "in port"
     for (const mmsi of activeMMSIs) {
       if (!tripState.has(mmsi)) {
         tripState.set(mmsi, { currentTripId: null, inPort: true, debounceCount: 0 });
@@ -270,7 +231,6 @@ async function restoreActiveTrips() {
 // ---------------------------------------------------------------------------
 
 async function startTrip(mmsi) {
-  if (!supabase) return null;
   const landing = getLanding(mmsi);
   const boatName = getBoatName(mmsi);
 
@@ -301,7 +261,7 @@ async function startTrip(mmsi) {
 }
 
 async function endTrip(tripId, boatName) {
-  if (!supabase || !tripId) return;
+  if (!tripId) return;
   try {
     const { error } = await supabase
       .from('trips')
@@ -319,18 +279,16 @@ async function endTrip(tripId, boatName) {
 }
 
 // ---------------------------------------------------------------------------
-// Supabase: batched position inserts
+// Supabase: batched position history inserts
 // ---------------------------------------------------------------------------
 
 async function flushPositionBuffer() {
-  if (!supabase || insertBuffer.length === 0) return;
+  if (insertBuffer.length === 0) return;
 
   const batch = insertBuffer.splice(0, insertBuffer.length);
 
   try {
-    const { error } = await supabase
-      .from('positions')
-      .insert(batch);
+    const { error } = await supabase.from('positions').insert(batch);
 
     if (error) {
       console.error(`[AIS] Failed to insert ${batch.length} positions:`, error.message);
@@ -345,11 +303,7 @@ async function flushPositionBuffer() {
       for (const [tripId, count] of Object.entries(tripCounts)) {
         await supabase.rpc('increment_trip_points', { trip_uuid: tripId, amount: count })
           .catch(() => {
-            supabase
-              .from('trips')
-              .update({ point_count: count })
-              .eq('id', tripId)
-              .catch(() => {});
+            supabase.from('trips').update({ point_count: count }).eq('id', tripId).catch(() => {});
           });
       }
     }
@@ -359,28 +313,60 @@ async function flushPositionBuffer() {
 }
 
 // ---------------------------------------------------------------------------
+// Supabase: batched fleet_positions upserts (real-time map data)
+// ---------------------------------------------------------------------------
+
+async function flushFleetPositions() {
+  if (positionUpsertBuffer.size === 0) return;
+
+  const rows = Array.from(positionUpsertBuffer.values());
+  positionUpsertBuffer.clear();
+
+  try {
+    const { error } = await supabase
+      .from('fleet_positions')
+      .upsert(rows, { onConflict: 'mmsi' });
+
+    if (error) {
+      console.error(`[AIS] Failed to upsert ${rows.length} fleet positions:`, error.message);
+    }
+  } catch (err) {
+    console.error(`[AIS] Error flushing fleet positions:`, err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Position processing
 // ---------------------------------------------------------------------------
 
 function processPosition(mmsi, name, lat, lng, sog, cog, heading) {
-  // Only process positions for actively tracked boats
   if (!isTrackedBoat(mmsi)) return;
 
-  // 1. Update the real-time positions map
+  const resolvedName = name?.trim() || getBoatName(mmsi);
+  const resolvedHeading = heading === 511 ? cog : heading;
+  const now = Date.now();
+
+  // 1. Update in-memory positions map
   positions.set(mmsi, {
-    mmsi,
-    name: name?.trim() || getBoatName(mmsi),
-    lat,
-    lng,
-    sog,
-    cog,
-    heading: heading === 511 ? cog : heading,
-    timestamp: Date.now(),
+    mmsi, name: resolvedName, lat, lng,
+    sog, cog, heading: resolvedHeading,
+    timestamp: now,
   });
 
-  // 2. Trip detection + Supabase persistence
-  if (!supabaseEnabled) return;
+  // 2. Queue fleet_positions upsert (for real-time map)
+  positionUpsertBuffer.set(mmsi, {
+    mmsi,
+    name: resolvedName,
+    landing: getLanding(mmsi),
+    lat,
+    lng,
+    speed: sog,
+    heading: resolvedHeading,
+    course: cog,
+    updated_at: new Date(now).toISOString(),
+  });
 
+  // 3. Trip detection + history persistence
   const landing = getLanding(mmsi);
   if (landing === 'unknown') return;
 
@@ -405,8 +391,7 @@ function processPosition(mmsi, name, lat, lng, sog, cog, heading) {
   } else if (!state.inPort && inPortNow) {
     state.debounceCount++;
     if (state.debounceCount >= DEBOUNCE_THRESHOLD) {
-      const boatName = getBoatName(mmsi);
-      endTrip(state.currentTripId, boatName);
+      endTrip(state.currentTripId, resolvedName);
       state.inPort = true;
       state.currentTripId = null;
       state.debounceCount = 0;
@@ -422,7 +407,7 @@ function processPosition(mmsi, name, lat, lng, sog, cog, heading) {
     lat,
     lng,
     speed: sog,
-    heading: heading === 511 ? cog : heading,
+    heading: resolvedHeading,
     recorded_at: new Date().toISOString(),
     trip_id: state.currentTripId,
   });
@@ -433,28 +418,13 @@ function processPosition(mmsi, name, lat, lng, sog, cog, heading) {
 }
 
 // ---------------------------------------------------------------------------
-// JSON file writer
+// Prune stale positions from memory
 // ---------------------------------------------------------------------------
 
-function writePositions() {
+function pruneStalePositions() {
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const [mmsi, pos] of positions) {
     if (pos.timestamp < cutoff) positions.delete(mmsi);
-  }
-
-  const data = {
-    connected,
-    count: positions.size,
-    activeBoats: activeMMSIs.size,
-    totalMessages: messageCount,
-    updatedAt: Date.now(),
-    positions: Array.from(positions.values()),
-  };
-
-  try {
-    writeFileSync(DATA_FILE, JSON.stringify(data));
-  } catch (err) {
-    console.error('Write error:', err.message);
   }
 }
 
@@ -474,7 +444,6 @@ function connect() {
       BoundingBoxes: [[[32.0, -118.5], [33.5, -117.0]]],
       FilterMessageTypes: ['PositionReport'],
     }));
-    writePositions();
   });
 
   ws.on('message', (data) => {
@@ -498,7 +467,7 @@ function connect() {
       );
 
       if (messageCount % 100 === 0) {
-        console.log(`[AIS] ${messageCount} msgs, ${positions.size} tracked, ${activeMMSIs.size} active boats, ${insertBuffer.length} buffered`);
+        console.log(`[AIS] ${messageCount} msgs, ${positions.size} tracked, ${activeMMSIs.size} active, ${insertBuffer.length} buffered`);
       }
     } catch { /* skip bad messages */ }
   });
@@ -511,7 +480,7 @@ function connect() {
   ws.on('close', (code, reason) => {
     console.log(`[AIS] Closed: ${code} ${reason.toString()}`);
     connected = false;
-    writePositions();
+    flushFleetPositions();
     flushPositionBuffer();
     console.log('[AIS] Reconnecting in 5s...');
     setTimeout(connect, 5000);
@@ -522,11 +491,14 @@ function connect() {
 // Timers
 // ---------------------------------------------------------------------------
 
-// Write JSON file every 2 seconds
-setInterval(writePositions, 2000);
+// Upsert fleet positions to Supabase every 5 seconds
+setInterval(flushFleetPositions, UPSERT_INTERVAL_MS);
 
-// Flush position buffer every 30 seconds
+// Flush trip position history every 30 seconds
 setInterval(flushPositionBuffer, FLUSH_INTERVAL_MS);
+
+// Prune stale in-memory positions every 60 seconds
+setInterval(pruneStalePositions, 60_000);
 
 // Refresh active boat list every 4 hours
 setInterval(refreshActiveBoats, REFRESH_INTERVAL_MS);
@@ -535,13 +507,10 @@ setInterval(refreshActiveBoats, REFRESH_INTERVAL_MS);
 // Start
 // ---------------------------------------------------------------------------
 
-console.log(`[AIS] Data file: ${DATA_FILE}`);
 console.log(`[AIS] Site URL: ${SITE_URL}`);
-console.log(`[AIS] Supabase: ${supabaseEnabled ? 'enabled' : 'disabled'}`);
+console.log('[AIS] Supabase: enabled');
+console.log('[AIS] Pipeline: aisstream.io -> Supabase fleet_positions + trips/positions');
 
-// 1. Load active boats from catch reports
-// 2. Restore any in-progress trips from Supabase
-// 3. Connect to AIS stream
 refreshActiveBoats()
   .then(() => restoreActiveTrips())
   .then(() => connect());

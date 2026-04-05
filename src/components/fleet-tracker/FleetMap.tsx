@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { AISStreamManager } from '@/lib/fleet/ais';
-import { KNOWN_MMSIS, getFleetBoat } from '@/lib/fleet/boats';
+import { getFleetBoat } from '@/lib/fleet/boats';
 import { classifyBoatStatus, pruneHistory } from '@/lib/fleet/fishing-detection';
 import Sidebar from './Sidebar';
 import MapLegend from './MapLegend';
@@ -73,7 +73,12 @@ function createBoatIcon(boat: TrackedBoat): L.DivIcon {
 // Popup HTML for a boat
 function createPopupContent(boat: TrackedBoat): string {
   const color = STATUS_COLORS[boat.status];
-  const landing = boat.landing === 'seaforth' ? 'Seaforth Landing' : boat.landing === 'fishermans' ? "Fisherman's Landing" : 'Unknown';
+  const LANDING_NAMES: Record<string, string> = {
+    seaforth: 'Seaforth Landing', fishermans: "Fisherman's Landing",
+    hm_landing: 'H&M Landing', point_loma: 'Point Loma SF',
+    helgrens: "Helgren's Sportfishing",
+  };
+  const landing = LANDING_NAMES[boat.landing] || boat.landing;
   const ago = Math.round((Date.now() - boat.lastUpdate) / 1000);
   const agoText = ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
 
@@ -241,11 +246,9 @@ export default function FleetMap() {
     };
   }, []);
 
-  // Connect to AIS stream directly via client-side WebSocket
+  // Poll fleet positions from Supabase via /api/fleet/positions
   useEffect(() => {
     const manager = new AISStreamManager({
-      apiKey: '',
-      knownMmsis: Array.from(KNOWN_MMSIS),
       onMessage: handleAISMessage,
       onStatus: setConnectionStatus,
     });
@@ -358,16 +361,14 @@ export default function FleetMap() {
       <div className="flex-1 relative">
         <div ref={mapContainerRef} className="w-full h-full" />
 
-        {/* No API Key overlay */}
-        {connectionStatus === 'no_key' && (
+        {/* Disconnected overlay */}
+        {connectionStatus === 'error' && (
           <div className="absolute inset-0 flex items-center justify-center z-[1000] pointer-events-none">
             <div className="bg-[#131b2e] border border-[#1e2a42] rounded-xl p-6 max-w-md text-center pointer-events-auto">
-              <div className="text-[#f97316] text-lg font-semibold mb-2">No AIS Connection</div>
+              <div className="text-[#f97316] text-lg font-semibold mb-2">Fleet Data Unavailable</div>
               <p className="text-[#8899aa] text-sm">
-                Fleet tracker requires an AIS data connection. Configure your
-                aisstream.io API key in <code className="text-[#00d4ff]">.env.local</code> as{' '}
-                <code className="text-[#00d4ff]">NEXT_PUBLIC_AISSTREAM_API_KEY</code> to see
-                live boat positions.
+                Live position data is temporarily unavailable. The AIS collector may be offline.
+                Positions will appear automatically when data flows resume.
               </p>
             </div>
           </div>

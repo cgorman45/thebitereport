@@ -1,37 +1,59 @@
+import { createClient } from '@supabase/supabase-js';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Proxy to the external AIS collector service (Railway/Render)
-// The collector maintains a persistent WebSocket to aisstream.io
-// and this endpoint simply fetches the latest positions from it.
-const COLLECTOR_URL = process.env.AIS_COLLECTOR_URL || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export async function GET() {
-  if (!COLLECTOR_URL) {
+  if (!supabaseUrl || !supabaseKey) {
     return Response.json({
       connected: false,
       count: 0,
       positions: [],
-      error: 'AIS_COLLECTOR_URL not configured',
+      error: 'Supabase not configured',
     });
   }
 
   try {
-    const res = await fetch(`${COLLECTOR_URL}/positions`, {
-      signal: AbortSignal.timeout(8000),
-    });
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!res.ok) {
+    // Only return positions updated within the last 10 minutes
+    const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from('fleet_positions')
+      .select('mmsi, name, landing, lat, lng, speed, heading, course, updated_at')
+      .gte('updated_at', cutoff)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
       return Response.json({
         connected: false,
         count: 0,
         positions: [],
-        error: `Collector returned ${res.status}`,
+        error: error.message,
       });
     }
 
-    const data = await res.json();
-    return Response.json(data);
+    const positions = (data || []).map(row => ({
+      mmsi: row.mmsi,
+      name: row.name,
+      landing: row.landing,
+      lat: row.lat,
+      lng: row.lng,
+      sog: row.speed,
+      cog: row.course,
+      heading: row.heading,
+      timestamp: new Date(row.updated_at).getTime(),
+    }));
+
+    return Response.json({
+      connected: positions.length > 0,
+      count: positions.length,
+      positions,
+    });
   } catch (err) {
     return Response.json({
       connected: false,
