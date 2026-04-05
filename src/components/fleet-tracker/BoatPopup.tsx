@@ -1,6 +1,8 @@
 'use client';
 
 import type { TrackedBoat, BoatStatus } from '@/lib/fleet/types';
+import FavoriteButton from '@/components/auth/FavoriteButton';
+import { useOptionalAuth } from '@/components/auth/AuthProvider';
 
 interface BoatPopupProps {
   boat: TrackedBoat;
@@ -59,6 +61,8 @@ function formatCoord(val: number): string {
 }
 
 export default function BoatPopup({ boat }: BoatPopupProps) {
+  const auth = useOptionalAuth();
+  const isFav = auth?.favorites.has(boat.mmsi) ?? false;
   const sc = STATUS_COLORS[boat.status];
   const landingName = LANDING_DISPLAY[boat.landing] ?? boat.landing;
   const relativeTime = getRelativeTime(boat.lastUpdate);
@@ -86,9 +90,13 @@ export default function BoatPopup({ boat }: BoatPopupProps) {
           color: '#e2e8f0',
           marginBottom: '2px',
           letterSpacing: '-0.01em',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
         }}
       >
         {boat.name}
+        <FavoriteButton mmsi={boat.mmsi} size={14} />
       </div>
 
       {/* Landing */}
@@ -183,6 +191,16 @@ export default function BoatPopup({ boat }: BoatPopupProps) {
         />
         Updated {relativeTime}
       </div>
+
+      {/* FOLLOWING badge for favorited boats */}
+      {isFav && (
+        <div style={{ marginTop: 6, textAlign: 'right' }}>
+          <span style={{
+            backgroundColor: '#22c55e20', color: '#22c55e',
+            fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600,
+          }}>FOLLOWING</span>
+        </div>
+      )}
     </div>
   );
 }

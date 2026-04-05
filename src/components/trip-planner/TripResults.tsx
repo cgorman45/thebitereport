@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { getLandingName, getLandingColor } from '@/lib/landings';
 import type { ScheduledTrip } from '@/lib/trips/types';
+import FavoriteButton from '@/components/auth/FavoriteButton';
+import WatchTripButton from '@/components/auth/WatchTripButton';
+import { useOptionalAuth } from '@/components/auth/AuthProvider';
 
 // Booking URLs for each landing
 const BOOKING_URLS: Record<string, string> = {
@@ -75,6 +78,8 @@ function TripResultCard({
   trip: ScheduledTrip;
   onViewOnMap?: (mmsi: number) => void;
 }) {
+  const auth = useOptionalAuth();
+  const isFav = auth?.favorites.has(trip.mmsi ?? 0) ?? false;
   const landingLabel = getLandingName(trip.landing);
   const landingColor = getLandingColor(trip.landing);
   const urgentSpots = trip.spotsLeft < 5;
@@ -100,9 +105,18 @@ function TripResultCard({
 
       {/* ── Left: Boat info ── */}
       <div className="flex-shrink-0 flex flex-col gap-2 md:w-52">
-        <h3 className="text-lg font-black leading-tight" style={{ color: '#e2e8f0' }}>
-          {trip.boatName}
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-black leading-tight" style={{ color: '#e2e8f0' }}>
+            {trip.boatName}
+          </h3>
+          {trip.mmsi && <FavoriteButton mmsi={trip.mmsi} />}
+          {isFav && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: '#22c55e20', color: '#22c55e' }}>
+              FOLLOWING
+            </span>
+          )}
+        </div>
 
         {/* Landing badge */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -269,6 +283,7 @@ function TripResultCard({
               View on Map
             </button>
           )}
+          <WatchTripButton tripId={trip.id} boatName={trip.boatName} tripDate={trip.departureDate} />
         </div>
       </div>
 

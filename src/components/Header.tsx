@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useOptionalAuth } from './auth/AuthProvider';
+import AuthModal from './auth/AuthModal';
+import UserMenu from './auth/UserMenu';
 
 const NAV_LINKS = [
   { href: '/', label: 'Bite Report' },
@@ -13,6 +16,7 @@ const NAV_LINKS = [
 
 export default function Header() {
   const pathname = usePathname();
+  const auth = useOptionalAuth();
 
   return (
     <header
@@ -56,19 +60,57 @@ export default function Header() {
               </Link>
             );
           })}
+          {auth?.user && (
+            <Link
+              href="/my-boats"
+              className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200"
+              style={{
+                backgroundColor: pathname === '/my-boats' ? '#f0c04018' : 'transparent',
+                color: pathname === '/my-boats' ? '#f0c040' : '#f0c040',
+                border: pathname === '/my-boats' ? '1px solid #f0c04033' : '1px solid transparent',
+              }}
+            >
+              My Boats
+            </Link>
+          )}
         </nav>
 
-        {/* Status indicator */}
-        <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
-          <span
-            className="inline-block h-2 w-2 rounded-full animate-pulse"
-            style={{ backgroundColor: '#22c55e' }}
-          />
-          <span className="text-xs" style={{ color: '#8899aa' }}>
-            Live
-          </span>
+        {/* Status indicator + Auth */}
+        <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-block h-2 w-2 rounded-full animate-pulse"
+              style={{ backgroundColor: '#22c55e' }}
+            />
+            <span className="text-xs" style={{ color: '#8899aa' }}>
+              Live
+            </span>
+          </div>
+          {auth?.user ? <UserMenu /> : (
+            <button
+              onClick={() => auth?.openAuthModal()}
+              className="px-4 py-1.5 rounded-md text-sm font-semibold transition-colors"
+              style={{ backgroundColor: '#00d4ff', color: '#0a0f1a' }}
+            >
+              Sign In
+            </button>
+          )}
+        </div>
+
+        {/* Mobile auth - visible on small screens */}
+        <div className="flex sm:hidden items-center flex-shrink-0">
+          {auth?.user ? <UserMenu /> : (
+            <button
+              onClick={() => auth?.openAuthModal()}
+              className="px-3 py-1 rounded-md text-xs font-semibold transition-colors"
+              style={{ backgroundColor: '#00d4ff', color: '#0a0f1a' }}
+            >
+              Sign In
+            </button>
+          )}
         </div>
       </div>
+      <AuthModal />
     </header>
   );
 }

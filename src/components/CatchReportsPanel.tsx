@@ -1,6 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { SPECIES_COLORS as SPECIES_COLOR_MAP } from '@/lib/constants';
+import FavoriteButton from '@/components/auth/FavoriteButton';
+import { useOptionalAuth } from '@/components/auth/AuthProvider';
+import { FLEET_ROSTER } from '@/lib/fleet/boats';
 
 // Simulated recent catch reports — in production these come from the scraper
 const SAMPLE_REPORTS = [
@@ -18,17 +22,10 @@ const SAMPLE_REPORTS = [
   { id: '12', boat: 'Sea Watch', landing: 'Seaforth', date: '2026-03-31', species: 'Rockfish', count: 210, anglers: 42, area: 'Point Loma Kelp' },
 ];
 
-const SPECIES_COLORS: Record<string, string> = {
-  'Yellowtail': '#eab308',
-  'Bluefin Tuna': '#3b82f6',
-  'Yellowfin Tuna': '#f97316',
-  'Rockfish': '#ef4444',
-  'Calico Bass': '#22c55e',
-  'White Seabass': '#8b5cf6',
-  'Barracuda': '#06b6d4',
-  'Lingcod': '#14b8a6',
-  'Dorado': '#84cc16',
-};
+// Derive flat text-color map from the shared species color definitions
+const SPECIES_COLORS: Record<string, string> = Object.fromEntries(
+  Object.entries(SPECIES_COLOR_MAP).map(([k, v]) => [k, v.text]),
+);
 
 function formatDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -47,13 +44,24 @@ function fishPerAngler(count: number, anglers: number): string {
   return (count / anglers).toFixed(1);
 }
 
+// Look up MMSI by boat name for favorite matching
+const boatMmsiMap = new Map(FLEET_ROSTER.map(b => [b.name.toLowerCase(), b.mmsi]));
+
 export default function CatchReportsPanel() {
+  const auth = useOptionalAuth();
   const [filter, setFilter] = useState<'all' | 'seaforth' | 'fishermans'>('all');
-  const reports = filter === 'all'
+  const filtered = filter === 'all'
     ? SAMPLE_REPORTS
     : filter === 'seaforth'
       ? SAMPLE_REPORTS.filter((r) => r.landing === 'Seaforth')
       : SAMPLE_REPORTS.filter((r) => r.landing === "Fisherman's");
+
+  // Sort: favorited boats first
+  const reports = [...filtered].sort((a, b) => {
+    const aFav = auth?.favorites.has(boatMmsiMap.get(a.boat.toLowerCase()) ?? 0) ? 0 : 1;
+    const bFav = auth?.favorites.has(boatMmsiMap.get(b.boat.toLowerCase()) ?? 0) ? 0 : 1;
+    return aFav - bFav;
+  });
 
   return (
     <div className="p-4">
@@ -88,18 +96,22 @@ export default function CatchReportsPanel() {
       <div className="flex flex-col gap-3">
         {reports.map((report) => {
           const speciesColor = SPECIES_COLORS[report.species] || '#8899aa';
+          const mmsi = boatMmsiMap.get(report.boat.toLowerCase());
+          const isFav = mmsi ? (auth?.favorites.has(mmsi) ?? false) : false;
           return (
             <div
               key={report.id}
               className="rounded-lg p-3 transition-colors"
               style={{
                 backgroundColor: '#131b2e',
-                border: '1px solid #1e2a42',
+                border: isFav ? '1px solid #f0c04033' : '1px solid #1e2a42',
+                borderLeft: isFav ? '3px solid #f0c040' : undefined,
               }}
             >
               {/* Top row: boat + date */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
+                  {mmsi && <FavoriteButton mmsi={mmsi} size={13} />}
                   <span className="text-sm font-bold" style={{ color: '#e2e8f0' }}>
                     {report.boat}
                   </span>
