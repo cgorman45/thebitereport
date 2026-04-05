@@ -11,7 +11,6 @@
  *
  * Usage: node scripts/ais-collector.mjs
  * Env:   AIS_API_KEY, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
- *        SITE_URL (optional, defaults to https://thebitereport.vercel.app)
  */
 
 import WebSocket from 'ws';
@@ -40,8 +39,6 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const SITE_URL = process.env.SITE_URL || 'https://thebitereport.vercel.app';
-const REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 // ---------------------------------------------------------------------------
 // Full fleet roster (static fallback + name/landing lookup)
@@ -82,57 +79,10 @@ const FULL_ROSTER = {
 };
 
 // ---------------------------------------------------------------------------
-// Dynamic active boat tracking
+// Fleet tracking — track ALL boats with known MMSIs
 // ---------------------------------------------------------------------------
 
-let activeMMSIs = new Set();
-let hasLoadedActiveBoats = false;
-
-async function refreshActiveBoats() {
-  try {
-    const url = `${SITE_URL}/api/fleet/active-boats`;
-    console.log(`[AIS] Refreshing active boats from ${url}...`);
-
-    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-
-    if (Array.isArray(data.boats) && data.boats.length > 0) {
-      const newSet = new Set();
-      for (const boat of data.boats) {
-        newSet.add(boat.mmsi);
-        if (!FULL_ROSTER[boat.mmsi]) {
-          FULL_ROSTER[boat.mmsi] = { name: boat.name, landing: boat.landing };
-        }
-      }
-
-      activeMMSIs = newSet;
-      hasLoadedActiveBoats = true;
-
-      const names = data.boats.map(b => b.name).join(', ');
-      console.log(`[AIS] Active boats (${activeMMSIs.size}): ${names}`);
-
-      if (data.unmatchedBoats?.length > 0) {
-        console.log(`[AIS] Boats without AIS: ${data.unmatchedBoats.join(', ')}`);
-      }
-
-      for (const mmsi of activeMMSIs) {
-        if (!tripState.has(mmsi)) {
-          tripState.set(mmsi, { currentTripId: null, inPort: true, debounceCount: 0 });
-        }
-      }
-    } else {
-      console.log('[AIS] API returned no active boats — keeping previous set');
-    }
-  } catch (err) {
-    console.error(`[AIS] Failed to refresh active boats: ${err.message}`);
-    if (!hasLoadedActiveBoats) {
-      activeMMSIs = new Set(Object.keys(FULL_ROSTER).map(Number));
-      console.log(`[AIS] Falling back to full fleet (${activeMMSIs.size} boats)`);
-    }
-  }
-}
+const activeMMSIs = new Set(Object.keys(FULL_ROSTER).map(Number));
 
 function isTrackedBoat(mmsi) { return activeMMSIs.has(mmsi); }
 function getLanding(mmsi) { return FULL_ROSTER[mmsi]?.landing || 'unknown'; }
@@ -500,17 +450,23 @@ setInterval(flushPositionBuffer, FLUSH_INTERVAL_MS);
 // Prune stale in-memory positions every 60 seconds
 setInterval(pruneStalePositions, 60_000);
 
-// Refresh active boat list every 4 hours
-setInterval(refreshActiveBoats, REFRESH_INTERVAL_MS);
 
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
 
-console.log(`[AIS] Site URL: ${SITE_URL}`);
 console.log('[AIS] Supabase: enabled');
 console.log('[AIS] Pipeline: aisstream.io -> Supabase fleet_positions + trips/positions');
 
-refreshActiveBoats()
-  .then(() => restoreActiveTrips())
+const names = Object.values(FULL_ROSTER).map(b => b.name).join(', ');
+console.log(`[AIS] Tracking all fleet boats (${activeMMSIs.size}): ${names}`);
+
+// Initialize trip state for all boats
+for (const mmsi of activeMMSIs) {
+  if (!tripState.has(mmsi)) {
+    tripState.set(mmsi, { currentTripId: null, inPort: true, debounceCount: 0 });
+  }
+}
+
+restoreActiveTrips()
   .then(() => connect());
