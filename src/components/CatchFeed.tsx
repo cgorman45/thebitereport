@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getLandingName, getLandingColor } from '@/lib/landings';
 import { SPECIES_COLORS, DEFAULT_SPECIES_COLOR } from '@/lib/constants';
+import { getBoatPhotoUrl, getBoatInitials } from '@/lib/fleet/boats';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -95,6 +96,48 @@ function FireIcon() {
   );
 }
 
+function BoatPhoto({ boatName, onClick }: { boatName: string; onClick: () => void }) {
+  const [imgError, setImgError] = useState(false);
+  const photoUrl = getBoatPhotoUrl(boatName);
+  const initials = getBoatInitials(boatName);
+
+  return (
+    <button
+      onClick={onClick}
+      title={`Book a trip on ${boatName}`}
+      style={{
+        width: '60px',
+        height: '60px',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        flexShrink: 0,
+        border: '1px solid #1e3a5a',
+        background: 'linear-gradient(135deg, #1a3a5c, #0d2240)',
+        cursor: 'pointer',
+        padding: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {photoUrl && !imgError ? (
+        <img
+          src={photoUrl}
+          alt={boatName}
+          width={60}
+          height={60}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <span style={{ fontSize: '18px', fontWeight: 800, color: '#4a6a8a', letterSpacing: '-0.02em' }}>
+          {initials}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatName: string) => void }) {
   const landingColor = getLandingColor(entry.landing);
   const landingName  = getLandingName(entry.landing);
@@ -142,6 +185,9 @@ function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatN
           {relDate}
         </span>
       </div>
+
+      {/* BOAT PHOTO */}
+      <BoatPhoto boatName={entry.boat} onClick={() => onBookTrip(entry.boat)} />
 
       {/* MIDDLE: boat + landing + area + stats */}
       <div style={{ flex: 1, minWidth: 0 }}>

@@ -13,6 +13,7 @@ export interface FleetBoat {
   mmsi: number;
   landing: Landing;
   vesselType?: string;
+  photo?: string; // slug for /boats/{slug}.jpg — omit for initials fallback
 }
 
 export interface PositionEntry {
