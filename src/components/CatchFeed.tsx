@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getLandingName, getLandingColor } from '@/lib/landings';
 import { SPECIES_COLORS, DEFAULT_SPECIES_COLOR } from '@/lib/constants';
-import { getBoatPhotoUrl, getBoatInitials } from '@/lib/fleet/boats';
+import { getBoatPhotoUrl, getBoatInitials, FLEET_ROSTER } from '@/lib/fleet/boats';
+import BoatTripModal from '@/components/fleet-tracker/BoatTripModalLoader';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,7 +105,7 @@ function BoatPhoto({ boatName, onClick }: { boatName: string; onClick: () => voi
   return (
     <button
       onClick={onClick}
-      title={`Book a trip on ${boatName}`}
+      title={`View ${boatName} trip history`}
       style={{
         width: '60px',
         height: '60px',
@@ -138,7 +139,14 @@ function BoatPhoto({ boatName, onClick }: { boatName: string; onClick: () => voi
   );
 }
 
-function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatName: string) => void }) {
+// Look up MMSI from boat name for trip modal
+function getBoatMmsi(boatName: string): number | null {
+  const lower = boatName.toLowerCase();
+  const boat = FLEET_ROSTER.find(b => b.name.toLowerCase() === lower);
+  return boat?.mmsi && boat.mmsi > 0 ? boat.mmsi : null;
+}
+
+function CatchRow({ entry, onBookTrip, onViewTrip }: { entry: CatchEntry; onBookTrip: (boatName: string) => void; onViewTrip: (boatName: string) => void }) {
   const landingColor = getLandingColor(entry.landing);
   const landingName  = getLandingName(entry.landing);
   const relDate      = getRelativeDate(entry.date);
@@ -186,8 +194,8 @@ function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatN
         </span>
       </div>
 
-      {/* BOAT PHOTO */}
-      <BoatPhoto boatName={entry.boat} onClick={() => onBookTrip(entry.boat)} />
+      {/* BOAT PHOTO — opens trip history modal */}
+      <BoatPhoto boatName={entry.boat} onClick={() => onViewTrip(entry.boat)} />
 
       {/* MIDDLE: boat + landing + area + stats */}
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -315,6 +323,7 @@ export default function CatchFeed() {
   const [activeFilter, setActiveFilter] = useState<LandingFilter>('all');
   const [liveData, setLiveData] = useState<CatchEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tripModalMmsi, setTripModalMmsi] = useState<number | null>(null);
 
   // Fetch live data from scraper API
   useEffect(() => {
@@ -337,6 +346,16 @@ export default function CatchFeed() {
 
   function handleBookTrip(boatName: string) {
     router.push(`/plan-your-trip?boat=${encodeURIComponent(boatName)}`);
+  }
+
+  function handleViewTrip(boatName: string) {
+    const mmsi = getBoatMmsi(boatName);
+    if (mmsi) {
+      setTripModalMmsi(mmsi);
+    } else {
+      // Fallback: navigate to plan-your-trip if no MMSI
+      handleBookTrip(boatName);
+    }
   }
 
   const filtered =
@@ -431,9 +450,14 @@ export default function CatchFeed() {
             </div>
           </div>
         ) : (
-          filtered.map((entry) => <CatchRow key={entry.id} entry={entry} onBookTrip={handleBookTrip} />)
+          filtered.map((entry) => <CatchRow key={entry.id} entry={entry} onBookTrip={handleBookTrip} onViewTrip={handleViewTrip} />)
         )}
       </div>
+
+      {/* Trip history modal */}
+      {tripModalMmsi && (
+        <BoatTripModal mmsi={tripModalMmsi} onClose={() => setTripModalMmsi(null)} />
+      )}
     </div>
   );
 }

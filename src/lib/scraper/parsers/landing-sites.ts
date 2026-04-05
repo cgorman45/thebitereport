@@ -97,7 +97,7 @@ function fetchWithTimeout(url: string): Promise<string> {
 /** Normalize a species name to match 976-tuna conventions */
 function normalizeSpeciesName(raw: string): string {
   // Strip punctuation, parenthetical notes like "(released)", weight info
-  let name = raw
+  const name = raw
     .replace(/[!?.]/g, '')
     .replace(/\(.*?\)/g, '')
     .replace(/\bup\s+to\s+\d+\s*(?:lbs?|pounds?)?\b/gi, '')
@@ -361,13 +361,13 @@ function parseHMLanding(html: string): LandingCatchEntry[] {
     );
     if (!catchMatch) continue;
 
-    let boatRaw = catchMatch[1].replace(/^The\s+/i, '').trim();
+    const boatRaw = catchMatch[1].replace(/^The\s+/i, '').trim();
     const speciesText = catchMatch[2];
     const anglers = catchMatch[3] ? parseInt(catchMatch[3], 10) : 0;
 
     // Extract trip type from boat name string
     const [tripType, boatClean] = extractTripType(boatRaw);
-    let boat = boatClean.replace(/\s+trip$/i, '').trim();
+    const boat = boatClean.replace(/\s+trip$/i, '').trim();
 
     // Validate: skip if boat name looks like a pronoun/article or is too long
     if (boat.length > 25) continue;
