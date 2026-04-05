@@ -268,7 +268,12 @@ async function scrapeReservationPage(
     // Build booking URL — use the original booking link if available
     let bookingUrl = tripId ? `${baseUrl}/user.php?trip_id=${tripId}` : url;
     const bookingLink = els.find('a[href*="trip_id"]').first().attr('href');
-    if (bookingLink) bookingUrl = bookingLink;
+    if (bookingLink) {
+      // Resolve relative URLs (e.g. "/sales/user.php?trip_id=123") against the page origin
+      bookingUrl = bookingLink.startsWith('http')
+        ? bookingLink
+        : new URL(bookingLink, url).href;
+    }
 
     trips.push({
       id: crypto.randomUUID(),
