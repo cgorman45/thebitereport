@@ -75,7 +75,6 @@ export default function NotificationsTab({ phone, notificationPrefs, onSave }: N
 
   const digits = extractDigits(phoneValue);
   const isPhoneEmpty = digits.length === 0;
-  const isPhoneValid = isPhoneEmpty || digits.length === 10;
   const isPhoneSaved = phone !== null && phone.length > 0;
 
   function togglePref(key: keyof NotificationPrefs, channel: 'email' | 'sms') {
