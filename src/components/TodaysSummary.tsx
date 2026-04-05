@@ -1,5 +1,13 @@
 'use client';
 
+import {
+  SOCAL_APRIL_SPECIES,
+  SPECIES_COLORS,
+  DEFAULT_SPECIES_COLOR,
+  MOON_SYMBOLS,
+  PRO_TIPS,
+} from '@/lib/constants';
+
 interface TodaysSummaryProps {
   location: string;
   region: string;
@@ -9,58 +17,6 @@ interface TodaysSummaryProps {
   moonPhase: string;
   windCondition: string;
 }
-
-// ---------------------------------------------------------------------------
-// Static data
-// ---------------------------------------------------------------------------
-
-const SOCAL_APRIL_SPECIES = [
-  'Yellowtail',
-  'Bluefin Tuna',
-  'Calico Bass',
-  'Rockfish',
-  'White Seabass',
-  'Barracuda',
-];
-
-const SPECIES_COLORS: Record<string, { bg: string; text: string }> = {
-  'Yellowtail':    { bg: 'rgba(234,179,8,0.15)',   text: '#eab308' },
-  'Bluefin Tuna':  { bg: 'rgba(0,212,255,0.12)',   text: '#00d4ff' },
-  'Calico Bass':   { bg: 'rgba(34,197,94,0.12)',   text: '#22c55e' },
-  'Rockfish':      { bg: 'rgba(249,115,22,0.13)',  text: '#f97316' },
-  'White Seabass': { bg: 'rgba(168,85,247,0.13)',  text: '#a855f7' },
-  'Barracuda':     { bg: 'rgba(239,68,68,0.12)',   text: '#ef4444' },
-};
-
-const DEFAULT_SPECIES_COLOR = { bg: 'rgba(136,153,170,0.15)', text: '#8899aa' };
-
-const MOON_SYMBOLS: Record<string, string> = {
-  'New Moon':       '🌑',
-  'Waxing Crescent':'🌒',
-  'First Quarter':  '🌓',
-  'Waxing Gibbous': '🌔',
-  'Full Moon':      '🌕',
-  'Waning Gibbous': '🌖',
-  'Last Quarter':   '🌗',
-  'Waning Crescent':'🌘',
-};
-
-const PRO_TIPS: string[] = [
-  // Sunday (0)
-  'New moon periods bring stronger tidal currents — fish the tide changes for yellowtail in open water.',
-  // Monday (1)
-  'Morning departures on full-day trips consistently produce the best results in April. Be on the water by first light.',
-  // Tuesday (2)
-  'Slow-pitch jigging near structure is lethal on calico bass this time of year. Drop to the reef and work the pause.',
-  // Wednesday (3)
-  'April water temps in the 60–65°F range are prime for white seabass. Fish the kelp edges at dawn with live squid.',
-  // Thursday (4)
-  'Bluefin tuna are surface-active on calm mornings. Look for birds working bait schools offshore of the 9-mile bank.',
-  // Friday (5)
-  'Overcast skies reduce surface glare and push rockfish shallower. Target 120–180 ft ledges on cloudy days.',
-  // Saturday (6)
-  'Full moon tides stack barracuda along current seams. Cast iron jigs parallel to the kelp line during the high tide run.',
-];
 
 // ---------------------------------------------------------------------------
 // Helper components

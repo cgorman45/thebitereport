@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { TripWindow, FishingEvent } from '@/types';
+import { getScoreColor, formatHourFull } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -10,24 +11,6 @@ import type { TripWindow, FishingEvent } from '@/types';
 interface TripPlannerProps {
   tripWindow: TripWindow | null;
   onClear: () => void;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getScoreColor(score: number): string {
-  if (score < 4) return '#ef4444';
-  if (score < 7) return '#eab308';
-  if (score < 9) return '#22c55e';
-  return '#00d4ff';
-}
-
-function formatHour(hour: number): string {
-  if (hour === 0) return '12:00 AM';
-  if (hour === 12) return '12:00 PM';
-  if (hour < 12) return `${hour}:00 AM`;
-  return `${hour - 12}:00 PM`;
 }
 
 function getEventIcon(type: string): string {
@@ -103,7 +86,7 @@ function EventBadge({ event }: { event: FishingEvent }) {
     >
       <span aria-hidden>{icon}</span>
       <span className="font-medium">{event.label}</span>
-      <span style={{ color: `${color}99` }}>{formatHour(event.hour)}</span>
+      <span style={{ color: `${color}99` }}>{formatHourFull(event.hour)}</span>
     </div>
   );
 }
@@ -167,9 +150,9 @@ export default function TripPlanner({ tripWindow, onClear }: TripPlannerProps) {
               Trip Window
             </p>
             <h2 className="text-lg font-bold" style={{ color: '#e2e8f0' }}>
-              {formatHour(tripWindow.startHour)}{' '}
+              {formatHourFull(tripWindow.startHour)}{' '}
               <span style={{ color: '#8899aa' }}>—</span>{' '}
-              {formatHour(tripWindow.endHour)}
+              {formatHourFull(tripWindow.endHour)}
             </h2>
           </div>
 
@@ -205,7 +188,7 @@ export default function TripPlanner({ tripWindow, onClear }: TripPlannerProps) {
           />
           <StatCell
             label="Best Hour"
-            value={formatHour(tripWindow.bestHour)}
+            value={formatHourFull(tripWindow.bestHour)}
             valueColor="#e2e8f0"
           />
         </div>

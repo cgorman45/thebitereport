@@ -1,29 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import type { FactorScore, FactorName } from '@/types';
+import type { FactorScore } from '@/types';
+import { FACTOR_LABELS } from '@/lib/constants';
+import { getScoreColor } from '@/lib/utils';
 
 interface ScoreBreakdownProps {
   factors: FactorScore[];
-}
-
-const FACTOR_LABELS: Record<FactorName, string> = {
-  weather: 'Weather',
-  tides: 'Tides',
-  barometricPressure: 'Pressure',
-  pressureDelta: 'Pressure Shift',
-  waterTemp: 'Water Temp',
-  moonPhase: 'Moon Phase',
-  timeOfDay: 'Time of Day',
-  wind: 'Wind',
-  catchReports: 'Catch Reports',
-};
-
-function getScoreColor(score: number): string {
-  if (score < 4) return '#ef4444';
-  if (score < 7) return '#eab308';
-  if (score < 9) return '#22c55e';
-  return '#00d4ff';
 }
 
 function FactorRow({ factor }: { factor: FactorScore }) {

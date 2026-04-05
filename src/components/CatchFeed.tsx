@@ -37,51 +37,6 @@ const _SPECIES_PRIORITY: Record<string, number> = {
   'Rockfish': 9,
 };
 
-// ---------------------------------------------------------------------------
-// Hardcoded catch data — ~25 entries across all 5 landings
-// ---------------------------------------------------------------------------
-
-// NOTE: This is SAMPLE DATA for demonstration purposes.
-// In production, this will be replaced with live data from the catch report scraper.
-// Trip types and counts are matched to realistic boat/landing combinations.
-const CATCH_DATA: CatchEntry[] = [
-  // --- Seaforth ---
-  { id: 'sf-01', boat: 'New Seaforth', landing: 'seaforth', tripType: '1/2 Day', date: '2026-04-02', species: 'Yellowtail', count: 12, anglers: 32, area: 'Coronado Islands', highlight: true, also: [{ species: 'Calico Bass', count: 24 }, { species: 'Barracuda', count: 8 }] },
-  { id: 'sf-02', boat: 'San Diego', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-02', species: 'Calico Bass', count: 85, anglers: 28, area: 'La Jolla Kelp', also: [{ species: 'Sheephead', count: 12 }, { species: 'Whitefish', count: 18 }] },
-  { id: 'sf-03', boat: 'Cortez', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-02', species: 'Bluefin Tuna', count: 8, anglers: 25, area: '9-Mile Bank', highlight: true, also: [{ species: 'Yellowtail', count: 14 }, { species: 'Bonito', count: 6 }] },
-  { id: 'sf-04', boat: 'Apollo', landing: 'seaforth', tripType: '3/4 Day', date: '2026-04-01', species: 'Rockfish', count: 156, anglers: 34, area: 'Point Loma Kelp', also: [{ species: 'Sculpin', count: 22 }, { species: 'Sheephead', count: 15 }] },
-  { id: 'sf-05', boat: 'Sea Watch', landing: 'seaforth', tripType: 'Full Day', date: '2026-04-01', species: 'White Seabass', count: 4, anglers: 22, area: 'Coronado Islands', highlight: true, also: [{ species: 'Yellowtail', count: 18 }, { species: 'Calico Bass', count: 30 }] },
-  // --- Fisherman's Landing ---
-  { id: 'fl-01', boat: 'Liberty', landing: 'fishermans', tripType: 'Full Day', date: '2026-04-02', species: 'Bluefin Tuna', count: 15, anglers: 26, area: '9-Mile Bank', highlight: true, also: [{ species: 'Yellowtail', count: 22 }, { species: 'Bonito', count: 10 }] },
-  { id: 'fl-02', boat: 'Pacific Queen', landing: 'fishermans', tripType: 'Overnight', date: '2026-04-02', species: 'Yellowtail', count: 67, anglers: 36, area: 'Coronado Islands', highlight: true, also: [{ species: 'Calico Bass', count: 45 }, { species: 'Barracuda', count: 18 }] },
-  { id: 'fl-03', boat: 'Excel', landing: 'fishermans', tripType: '2.5 Day', date: '2026-04-01', species: 'Yellowfin Tuna', count: 41, anglers: 22, area: '60-Mile Bank', also: [{ species: 'Dorado', count: 8 }, { species: 'Skipjack', count: 15 }] },
-  { id: 'fl-04', boat: 'Polaris Supreme', landing: 'fishermans', tripType: '3 Day', date: '2026-04-01', species: 'Bluefin Tuna', count: 32, anglers: 20, area: 'Tanner Bank', highlight: true, also: [{ species: 'Yellowfin Tuna', count: 14 }, { species: 'Yellowtail', count: 8 }] },
-  { id: 'fl-05', boat: 'Fortune', landing: 'fishermans', tripType: '3/4 Day', date: '2026-04-02', species: 'Barracuda', count: 48, anglers: 29, area: 'Point Loma Kelp', also: [{ species: 'Calico Bass', count: 35 }, { species: 'Sand Bass', count: 12 }] },
-  { id: 'fl-06', boat: 'Dolphin', landing: 'fishermans', tripType: '1/2 Day', date: '2026-04-01', species: 'Rockfish', count: 95, anglers: 33, area: 'Pt Loma Deep', also: [{ species: 'Sculpin', count: 18 }, { species: 'Whitefish', count: 10 }] },
-  // --- H&M Landing ---
-  { id: 'hm-01', boat: 'Mission Belle', landing: 'hm_landing', tripType: 'Full Day', date: '2026-04-02', species: 'Calico Bass', count: 62, anglers: 21, area: 'La Jolla Kelp', also: [{ species: 'Sheephead', count: 8 }, { species: 'Sand Bass', count: 14 }] },
-  { id: 'hm-02', boat: 'Patriot', landing: 'hm_landing', tripType: '3/4 Day', date: '2026-04-02', species: 'Yellowtail', count: 18, anglers: 27, area: 'Coronado Islands', highlight: true, also: [{ species: 'Barracuda', count: 12 }, { species: 'Bonito', count: 9 }] },
-  { id: 'hm-03', boat: 'Daily Double', landing: 'hm_landing', tripType: '1/2 Day', date: '2026-04-01', species: 'White Seabass', count: 3, anglers: 14, area: 'La Jolla Kelp', highlight: true, also: [{ species: 'Calico Bass', count: 16 }] },
-  { id: 'hm-04', boat: 'Shogun', landing: 'hm_landing', tripType: '2 Day', date: '2026-04-01', species: 'Yellowfin Tuna', count: 28, anglers: 18, area: '43-Fathom Spot', also: [{ species: 'Yellowtail', count: 12 }, { species: 'Dorado', count: 5 }] },
-  { id: 'hm-05', boat: 'Patriot', landing: 'hm_landing', tripType: '3/4 Day', date: '2026-04-01', species: 'Lingcod', count: 11, anglers: 16, area: 'Pt Loma Deep', also: [{ species: 'Rockfish', count: 42 }, { species: 'Sculpin', count: 8 }] },
-  // --- Point Loma SF ---
-  { id: 'pl-01', boat: 'Point Loma', landing: 'point_loma', tripType: 'Full Day', date: '2026-04-02', species: 'Yellowtail', count: 35, anglers: 31, area: 'Coronado Islands', highlight: true, also: [{ species: 'Calico Bass', count: 28 }, { species: 'Barracuda', count: 15 }] },
-  { id: 'pl-02', boat: 'New Lo-An', landing: 'point_loma', tripType: '3/4 Day', date: '2026-04-02', species: 'Calico Bass', count: 72, anglers: 24, area: 'Point Loma Kelp', also: [{ species: 'Sand Bass', count: 18 }, { species: 'Sheephead', count: 9 }] },
-  { id: 'pl-03', boat: 'Point Loma', landing: 'point_loma', tripType: 'Full Day', date: '2026-04-01', species: 'Barracuda', count: 44, anglers: 28, area: 'La Jolla Kelp', also: [{ species: 'Calico Bass', count: 32 }, { species: 'Bonito', count: 11 }] },
-  { id: 'pl-04', boat: 'Premier', landing: 'point_loma', tripType: '1.5 Day', date: '2026-04-01', species: 'Bluefin Tuna', count: 19, anglers: 18, area: '9-Mile Bank', highlight: true, also: [{ species: 'Yellowtail', count: 24 }] },
-  // --- Helgren's ---
-  { id: 'hg-01', boat: 'Oceanside 95', landing: 'helgrens', tripType: '3/4 Day', date: '2026-04-02', species: 'Yellowtail', count: 22, anglers: 20, area: 'Oceanside Kelp', highlight: true, also: [{ species: 'Calico Bass', count: 15 }, { species: 'Barracuda', count: 7 }] },
-  { id: 'hg-02', boat: 'Sea Star', landing: 'helgrens', tripType: '1/2 Day', date: '2026-04-02', species: 'Calico Bass', count: 38, anglers: 24, area: 'Carlsbad Kelp', also: [{ species: 'Sand Bass', count: 12 }] },
-  { id: 'hg-03', boat: 'Oceanside 95', landing: 'helgrens', tripType: 'Full Day', date: '2026-04-01', species: 'Rockfish', count: 145, anglers: 30, area: 'Oceanside Deep', also: [{ species: 'Lingcod', count: 8 }, { species: 'Sheephead', count: 14 }] },
-  { id: 'hg-04', boat: 'Sea Star', landing: 'helgrens', tripType: '1/2 Day', date: '2026-04-01', species: 'Lingcod', count: 7, anglers: 18, area: 'Camp Pendleton Reef', also: [{ species: 'Rockfish', count: 52 }] },
-  { id: 'hg-05', boat: 'Oceanside 95', landing: 'helgrens', tripType: '3/4 Day', date: '2026-04-02', species: 'White Seabass', count: 5, anglers: 15, area: 'Carlsbad Kelp', highlight: true, also: [{ species: 'Calico Bass', count: 20 }, { species: 'Barracuda', count: 6 }] },
-];
-
-// Sort newest first
-const SORTED_DATA = [...CATCH_DATA].sort(
-  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-);
-
 // Species colors imported from @/lib/constants
 
 // ---------------------------------------------------------------------------
@@ -291,8 +246,8 @@ function CatchRow({ entry, onBookTrip }: { entry: CatchEntry; onBookTrip: (boatN
         {/* Secondary catches — smaller, stacked */}
         {entry.also && entry.also.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', borderLeft: '1px solid #1e2a42', paddingLeft: '8px' }}>
-            {entry.also.map((a) => (
-              <span key={a.species} style={{ fontSize: '10px', color: '#8899aa', whiteSpace: 'nowrap' }}>
+            {entry.also.map((a, i) => (
+              <span key={`${a.species}-${i}`} style={{ fontSize: '10px', color: '#8899aa', whiteSpace: 'nowrap' }}>
                 {a.species} <span style={{ fontWeight: 700, color: '#e2e8f0' }}>{a.count}</span>
               </span>
             ))}
@@ -328,8 +283,8 @@ export default function CatchFeed() {
     return () => controller.abort();
   }, []);
 
-  // Use live data if available, otherwise fall back to sample
-  const sourceData = liveData || SORTED_DATA;
+  // Use live data only — no sample fallback
+  const sourceData = liveData ?? [];
   const isLive = liveData !== null && liveData.length > 0;
 
   function handleBookTrip(boatName: string) {
@@ -348,21 +303,23 @@ export default function CatchFeed() {
         <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#e2e8f0', margin: 0 }}>
           Catch Reports
         </h2>
-        <span
-          style={{
-            fontSize: '10px',
-            color: isLive ? '#22c55e' : '#f97316',
-            backgroundColor: isLive ? '#22c55e15' : '#f9731615',
-            border: `1px solid ${isLive ? '#22c55e33' : '#f9731633'}`,
-            padding: '2px 8px',
-            borderRadius: '9999px',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          {loading ? 'Loading...' : isLive ? 'Live Data' : 'Sample Data'}
-        </span>
+        {(loading || isLive) && (
+          <span
+            style={{
+              fontSize: '10px',
+              color: loading ? '#8899aa' : '#22c55e',
+              backgroundColor: loading ? '#8899aa15' : '#22c55e15',
+              border: `1px solid ${loading ? '#8899aa33' : '#22c55e33'}`,
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            {loading ? 'Loading...' : 'Live Data'}
+          </span>
+        )}
       </div>
 
       {/* Filter pills */}
@@ -409,9 +366,21 @@ export default function CatchFeed() {
           overflow: 'hidden',
         }}
       >
-        {filtered.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: '#8899aa', fontSize: '14px' }}>
-            No reports found for this landing.
+        {loading ? (
+          <div style={{ padding: '40px 32px', textAlign: 'center' }}>
+            <div style={{ fontSize: '14px', color: '#8899aa' }}>Loading catch reports...</div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: '40px 32px', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', marginBottom: '8px' }}>🎣</div>
+            <div style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 600, marginBottom: '4px' }}>
+              {sourceData.length === 0 ? 'Reports updating' : 'No reports for this landing'}
+            </div>
+            <div style={{ fontSize: '12px', color: '#8899aa' }}>
+              {sourceData.length === 0
+                ? 'Live catch data refreshes every 4 hours. Check back soon!'
+                : 'Try selecting a different landing above.'}
+            </div>
           </div>
         ) : (
           filtered.map((entry) => <CatchRow key={entry.id} entry={entry} onBookTrip={handleBookTrip} />)

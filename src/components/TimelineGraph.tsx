@@ -35,12 +35,7 @@ interface DragState {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getScoreColor(score: number): string {
-  if (score < 4) return '#ef4444';
-  if (score < 7) return '#eab308';
-  if (score < 9) return '#22c55e';
-  return '#00d4ff';
-}
+import { getScoreColor, formatHour } from '@/lib/utils';
 
 function getEventColor(type: string): string {
   if (type === 'tide_high' || type === 'tide_low') return '#4fc3f7';
@@ -48,13 +43,6 @@ function getEventColor(type: string): string {
   if (type === 'moonrise' || type === 'moonset') return '#b0bec5';
   if (type === 'pressure_drop') return '#ef5350';
   return '#8899aa';
-}
-
-function formatHour(hour: number): string {
-  if (hour === 0) return '12 AM';
-  if (hour === 12) return '12 PM';
-  if (hour < 12) return `${hour} AM`;
-  return `${hour - 12} PM`;
 }
 
 // ---------------------------------------------------------------------------

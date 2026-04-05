@@ -1,14 +1,7 @@
 import type { FactorScore } from '@/types';
+import { getScoreLabel as getLabel } from '@/lib/utils';
 
 const MB_TO_INHG = 1 / 33.8639;
-
-function getLabel(score: number): string {
-  if (score <= 2) return 'Poor';
-  if (score <= 4) return 'Fair';
-  if (score <= 6) return 'Moderate';
-  if (score <= 8) return 'Good';
-  return 'Excellent';
-}
 
 export function scorePressureDelta(
   pressures: number[],

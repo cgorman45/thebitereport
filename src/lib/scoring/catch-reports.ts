@@ -1,12 +1,5 @@
 import type { CatchReport, FactorScore } from '@/types';
-
-function getLabel(score: number): string {
-  if (score <= 2) return 'Poor';
-  if (score <= 4) return 'Fair';
-  if (score <= 6) return 'Moderate';
-  if (score <= 8) return 'Good';
-  return 'Excellent';
-}
+import { getScoreLabel as getLabel } from '@/lib/utils';
 
 export function scoreCatchReports(
   reports: CatchReport[],

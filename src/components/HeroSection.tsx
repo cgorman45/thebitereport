@@ -1,8 +1,10 @@
 'use client';
 
-export default function HeroSection() {
+import type { ReactNode } from 'react';
+
+export default function HeroSection({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="relative w-full overflow-hidden" style={{ minHeight: '340px' }}>
+    <div className="relative w-full overflow-hidden">
       {/* Ocean photo background */}
       <div
         className="absolute inset-0"
@@ -33,7 +35,6 @@ export default function HeroSection() {
       {/* Content */}
       <div
         className="relative z-10 flex flex-col items-center justify-center text-center px-4 py-14 sm:py-16"
-        style={{ minHeight: '280px' }}
       >
         {/* Eye-catching tag line above headline */}
         <div
@@ -152,6 +153,9 @@ export default function HeroSection() {
             <span>Live Fleet Tracking</span>
           </div>
         </div>
+
+        {/* Optional children (e.g. TripSearch widget) */}
+        {children}
       </div>
 
       {/* Animated wave SVG divider at the bottom */}

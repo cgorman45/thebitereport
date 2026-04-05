@@ -1,14 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import HeroSection from '@/components/HeroSection';
+import HeroTripSearch from '@/components/HeroTripSearch';
 import CatchFeed from '@/components/CatchFeed';
 import ScoreSidebar from '@/components/ScoreSidebar';
 import ForecastCard from '@/components/ForecastCard';
 import LocationSearch from '@/components/LocationSearch';
 import { locations } from '@/lib/locations';
+import { TRIP_SCHEDULE } from '@/lib/trips/schedule';
+import type { ScheduledTrip } from '@/lib/trips/types';
 import type { DailyScore, FishingEvent } from '@/types';
 
 export default function Home() {
@@ -17,6 +20,15 @@ export default function Home() {
   const [dailyScore, setDailyScore] = useState<DailyScore | null>(null);
   const [forecast, setForecast] = useState<DailyScore[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Trip search state
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDuration, setSelectedDuration] = useState<string | null>(null);
+  const [anglers, setAnglers] = useState(1);
+  const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null);
+  const [departureCity, setDepartureCity] = useState('San Diego');
+  const [liveTrips, setLiveTrips] = useState<ScheduledTrip[] | null>(null);
+  const [tripsLoading, setTripsLoading] = useState(true);
 
   const fetchScore = useCallback(async (slug: string, date?: string) => {
     const params = new URLSearchParams({ location: slug });
@@ -53,6 +65,39 @@ export default function Home() {
     loadData();
   }, [selectedSlug, fetchScore]);
 
+  // Fetch live trip data for the hero search widget
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/trips', { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data: ScheduledTrip[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setLiveTrips(data);
+        }
+      })
+      .catch(() => {/* use static fallback */})
+      .finally(() => setTripsLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  const allTrips = useMemo(() => {
+    if (!liveTrips?.length) return TRIP_SCHEDULE;
+    return [...TRIP_SCHEDULE, ...liveTrips];
+  }, [liveTrips]);
+
+  const isLiveData = liveTrips !== null && liveTrips.length > 0;
+
+  function handleTripSearch() {
+    const params = new URLSearchParams();
+    if (selectedDate) params.set('date', selectedDate);
+    if (selectedDuration) params.set('duration', selectedDuration);
+    if (selectedSpecies) params.set('species', selectedSpecies);
+    if (anglers > 1) params.set('anglers', String(anglers));
+    params.set('city', departureCity);
+    const qs = params.toString();
+    router.push(`/plan-your-trip?${qs}`);
+  }
+
   // Extract conditions from score data
   const currentHour = new Date().getHours();
   const allEvents: FishingEvent[] =
@@ -68,7 +113,35 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       <Header />
-      <HeroSection />
+      <HeroSection>
+        <div className="w-full max-w-4xl mx-auto mt-8">
+          {!tripsLoading && (
+            <div className="text-center mb-3">
+              <span
+                className="inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider"
+                style={{
+                  color: isLiveData ? '#22c55e' : '#f97316',
+                  backgroundColor: isLiveData ? '#22c55e15' : '#f9731615',
+                  border: `1px solid ${isLiveData ? '#22c55e33' : '#f9731633'}`,
+                }}
+              >
+                {isLiveData ? `${allTrips.length} Live Trips` : 'Sample Data'}
+              </span>
+            </div>
+          )}
+          <HeroTripSearch
+            selectedDuration={selectedDuration}
+            onDurationChange={setSelectedDuration}
+            anglers={anglers}
+            onAnglersChange={setAnglers}
+            selectedSpecies={selectedSpecies}
+            onSpeciesChange={setSelectedSpecies}
+            departureCity={departureCity}
+            onDepartureCityChange={setDepartureCity}
+            onSearch={handleTripSearch}
+          />
+        </div>
+      </HeroSection>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         {/* Two-column layout: Feed + Sidebar */}

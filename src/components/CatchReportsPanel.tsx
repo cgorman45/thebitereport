@@ -1,26 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SPECIES_COLORS as SPECIES_COLOR_MAP } from '@/lib/constants';
 import FavoriteButton from '@/components/auth/FavoriteButton';
 import { useOptionalAuth } from '@/components/auth/AuthProvider';
 import { FLEET_ROSTER } from '@/lib/fleet/boats';
 
-// Simulated recent catch reports — in production these come from the scraper
-const SAMPLE_REPORTS = [
-  { id: '1', boat: 'Cortez', landing: 'Seaforth', date: '2026-04-02', species: 'Yellowtail', count: 38, anglers: 28, area: 'Coronado Islands' },
-  { id: '2', boat: 'Liberty', landing: "Fisherman's", date: '2026-04-02', species: 'Bluefin Tuna', count: 12, anglers: 30, area: '9 Mile Bank' },
-  { id: '3', boat: 'New Seaforth', landing: 'Seaforth', date: '2026-04-02', species: 'Rockfish', count: 185, anglers: 40, area: 'Point Loma Kelp' },
-  { id: '4', boat: 'Pacific Queen', landing: "Fisherman's", date: '2026-04-02', species: 'Yellowfin Tuna', count: 22, anglers: 25, area: '43 Fathom Spot' },
-  { id: '5', boat: 'San Diego', landing: 'Seaforth', date: '2026-04-01', species: 'Calico Bass', count: 64, anglers: 35, area: 'La Jolla Kelp' },
-  { id: '6', boat: 'Excel', landing: "Fisherman's", date: '2026-04-01', species: 'Yellowtail', count: 55, anglers: 28, area: 'Coronado Islands' },
-  { id: '7', boat: 'Highliner', landing: 'Seaforth', date: '2026-04-01', species: 'White Seabass', count: 8, anglers: 32, area: 'Catalina Island' },
-  { id: '8', boat: 'Polaris Supreme', landing: "Fisherman's", date: '2026-04-01', species: 'Bluefin Tuna', count: 45, anglers: 22, area: 'Tanner Bank' },
-  { id: '9', boat: 'Apollo', landing: 'Seaforth', date: '2026-03-31', species: 'Barracuda', count: 72, anglers: 30, area: 'Point Loma' },
-  { id: '10', boat: 'Constitution', landing: "Fisherman's", date: '2026-03-31', species: 'Lingcod', count: 15, anglers: 28, area: '9 Mile Bank' },
-  { id: '11', boat: 'Fortune', landing: "Fisherman's", date: '2026-03-31', species: 'Yellowtail', count: 42, anglers: 25, area: 'Coronado Islands' },
-  { id: '12', boat: 'Sea Watch', landing: 'Seaforth', date: '2026-03-31', species: 'Rockfish', count: 210, anglers: 42, area: 'Point Loma Kelp' },
-];
+interface CatchReport {
+  id: string;
+  boat: string;
+  landing: string;
+  date: string;
+  species: string;
+  count: number;
+  anglers: number;
+  area: string;
+}
 
 // Derive flat text-color map from the shared species color definitions
 const SPECIES_COLORS: Record<string, string> = Object.fromEntries(
@@ -50,18 +45,56 @@ const boatMmsiMap = new Map(FLEET_ROSTER.map(b => [b.name.toLowerCase(), b.mmsi]
 export default function CatchReportsPanel() {
   const auth = useOptionalAuth();
   const [filter, setFilter] = useState<'all' | 'seaforth' | 'fishermans'>('all');
+  const [reports, setReports] = useState<CatchReport[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch live catch data
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/catch-reports', { signal: controller.signal })
+      .then((r) => r.json())
+      .then((data: CatchReport[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setReports(data);
+        }
+      })
+      .catch(() => {/* no data available */})
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, []);
+
   const filtered = filter === 'all'
-    ? SAMPLE_REPORTS
+    ? reports
     : filter === 'seaforth'
-      ? SAMPLE_REPORTS.filter((r) => r.landing === 'Seaforth')
-      : SAMPLE_REPORTS.filter((r) => r.landing === "Fisherman's");
+      ? reports.filter((r) => r.landing.toLowerCase().includes('seaforth'))
+      : reports.filter((r) => r.landing.toLowerCase().includes('fisherman'));
 
   // Sort: favorited boats first
-  const reports = [...filtered].sort((a, b) => {
+  const sorted = [...filtered].sort((a, b) => {
     const aFav = auth?.favorites.has(boatMmsiMap.get(a.boat.toLowerCase()) ?? 0) ? 0 : 1;
     const bFav = auth?.favorites.has(boatMmsiMap.get(b.boat.toLowerCase()) ?? 0) ? 0 : 1;
     return aFav - bFav;
   });
+
+  if (loading) {
+    return (
+      <div className="p-4 text-center">
+        <p className="text-xs" style={{ color: '#8899aa' }}>Loading catch reports...</p>
+      </div>
+    );
+  }
+
+  if (reports.length === 0) {
+    return (
+      <div className="p-4 text-center">
+        <div style={{ fontSize: '20px', marginBottom: '6px' }}>🎣</div>
+        <p className="text-xs font-semibold" style={{ color: '#e2e8f0' }}>Reports updating</p>
+        <p className="text-[10px] mt-1" style={{ color: '#8899aa' }}>
+          Live catch data refreshes every 4 hours. Check back soon!
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4">
@@ -89,12 +122,12 @@ export default function CatchReportsPanel() {
 
       {/* Report count */}
       <p className="text-xs mb-3" style={{ color: '#8899aa' }}>
-        {reports.length} recent reports
+        {sorted.length} recent reports
       </p>
 
       {/* Reports list */}
       <div className="flex flex-col gap-3">
-        {reports.map((report) => {
+        {sorted.map((report) => {
           const speciesColor = SPECIES_COLORS[report.species] || '#8899aa';
           const mmsi = boatMmsiMap.get(report.boat.toLowerCase());
           const isFav = mmsi ? (auth?.favorites.has(mmsi) ?? false) : false;
@@ -118,8 +151,8 @@ export default function CatchReportsPanel() {
                   <span
                     className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
                     style={{
-                      backgroundColor: report.landing === 'Seaforth' ? '#00d4ff15' : '#f9731615',
-                      color: report.landing === 'Seaforth' ? '#00d4ff' : '#f97316',
+                      backgroundColor: report.landing.toLowerCase().includes('seaforth') ? '#00d4ff15' : '#f9731615',
+                      color: report.landing.toLowerCase().includes('seaforth') ? '#00d4ff' : '#f97316',
                     }}
                   >
                     {report.landing}

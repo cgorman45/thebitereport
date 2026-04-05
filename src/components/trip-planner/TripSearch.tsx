@@ -160,7 +160,7 @@ export default function TripSearch({
   return (
     <>
       <div
-        className="rounded-2xl overflow-hidden"
+        className="rounded-2xl overflow-visible"
         style={{
           backgroundColor: '#131b2e',
           border: '1px solid #1e2a42',

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import GlobalSideTabs from '@/components/GlobalSideTabs';
 import AuthProvider from '@/components/auth/AuthProvider';
+import { Analytics } from '@vercel/analytics/next';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -39,6 +40,7 @@ export default function RootLayout({
           {children}
           <GlobalSideTabs />
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );

@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useOptionalAuth } from './auth/AuthProvider';
@@ -12,6 +13,9 @@ const NAV_LINKS = [
   { href: '/plan-your-trip', label: 'Plan Trip' },
   { href: '/weather', label: 'Weather' },
   { href: '/gear', label: 'Gear' },
+  { href: '/reports', label: 'Reports' },
+  { href: '/local-intel', label: 'Intel' },
+  { href: '/tutorials', label: 'Tutorials' },
 ];
 
 export default function Header() {
@@ -19,6 +23,7 @@ export default function Header() {
   const auth = useOptionalAuth();
 
   return (
+    <React.Fragment>
     <header
       className="sticky top-0 z-40 w-full"
       style={{
@@ -110,7 +115,8 @@ export default function Header() {
           )}
         </div>
       </div>
-      <AuthModal />
     </header>
+    <AuthModal />
+    </React.Fragment>
   );
 }

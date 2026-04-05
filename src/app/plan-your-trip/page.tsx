@@ -8,6 +8,7 @@ import PriceCalendar from '@/components/trip-planner/PriceCalendar';
 import TripFilters, { type FilterState } from '@/components/trip-planner/TripFilters';
 import TripResults from '@/components/trip-planner/TripResults';
 import ChatBubble from '@/components/trip-planner/ChatBubble';
+import PopularBoats from '@/components/trip-planner/PopularBoats';
 import { TRIP_SCHEDULE } from '@/lib/trips/schedule';
 import type { ScheduledTrip } from '@/lib/trips/types';
 
@@ -36,20 +37,31 @@ export default function PlanYourTripPage() {
   const boatParam = searchParams.get('boat');
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedDuration, setSelectedDuration] = useState<string | null>(null);
-  const [anglers, setAnglers] = useState(1);
+  // Initialize state from URL query params (passed from homepage hero search)
+  const [selectedDate, setSelectedDate] = useState<string | null>(searchParams.get('date'));
+  const [selectedDuration, setSelectedDuration] = useState<string | null>(searchParams.get('duration'));
+  const [anglers, setAnglers] = useState(() => {
+    const a = searchParams.get('anglers');
+    return a ? parseInt(a, 10) || 1 : 1;
+  });
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [liveTrips, setLiveTrips] = useState<ScheduledTrip[] | null>(null);
   const [tripsLoading, setTripsLoading] = useState(true);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [hasSearched, setHasSearched] = useState(() => {
+    // Auto-show results if any search param was passed from homepage
+    return !!(boatParam || searchParams.get('q') || searchParams.get('duration') || searchParams.get('species') || searchParams.get('date') || searchParams.get('city') || searchParams.get('anglers'));
+  });
 
   // New search fields
-  const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null);
-  const [departureCity, setDepartureCity] = useState('San Diego');
+  const [selectedSpecies, setSelectedSpecies] = useState<string | null>(searchParams.get('species'));
+  const [departureCity, setDepartureCity] = useState(searchParams.get('city') || 'San Diego');
 
-  // Auto-show results if boat param is set
+  // Text search for boats / captains
+  const qParam = searchParams.get('q');
+  const [searchQuery, setSearchQuery] = useState(qParam || '');
+
+  // Auto-show results if boat param is set (keep for direct boat links)
   useEffect(() => {
     if (boatParam) {
       setTimeout(() => setHasSearched(true), 0);
@@ -91,6 +103,16 @@ export default function PlanYourTripPage() {
       if (boatMatches.length > 0) {
         results = boatMatches;
       }
+    }
+
+    // Text search filter (boats / captains)
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      results = results.filter(
+        (t) =>
+          t.boatName.toLowerCase().includes(q) ||
+          (t.operator && t.operator.toLowerCase().includes(q))
+      );
     }
 
     // Species from hero search
@@ -182,7 +204,7 @@ export default function PlanYourTripPage() {
     }
 
     return results;
-  }, [allTrips, boatParam, selectedDate, selectedDuration, selectedSpecies, anglers, filters]);
+  }, [allTrips, boatParam, searchQuery, selectedDate, selectedDuration, selectedSpecies, anglers, filters]);
 
   const handleViewOnMap = useCallback(
     (mmsi: number) => {
@@ -207,7 +229,7 @@ export default function PlanYourTripPage() {
       {/* ═══════════════════════════════════════
           Google Flights-style Hero + Search
           ═══════════════════════════════════════ */}
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-x-hidden">
         {/* Background image */}
         <div
           className="absolute inset-0"
@@ -315,6 +337,62 @@ export default function PlanYourTripPage() {
       </div>
 
       {/* ═══════════════════════════════════════
+          Boat / Captain search bar
+          ═══════════════════════════════════════ */}
+      <div className="max-w-[600px] mx-auto px-4 pt-6 pb-2">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (searchQuery.trim()) {
+              setHasSearched(true);
+              setTimeout(() => {
+                resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 100);
+            }
+          }}
+          className="relative"
+        >
+          <svg
+            className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#8899aa"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search boats or captains..."
+            className="w-full rounded-full py-3 pl-11 pr-24 text-sm outline-none transition-colors focus:ring-1 focus:ring-[#00d4ff]/40 placeholder:text-[#8899aa]"
+            style={{
+              backgroundColor: '#131b2e',
+              border: '1px solid #1e2a42',
+              color: '#e2e8f0',
+              caretColor: '#00d4ff',
+            }}
+          />
+          <button
+            type="submit"
+            className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors hover:brightness-110"
+            style={{
+              backgroundColor: '#00d4ff',
+              color: '#0a0f1a',
+            }}
+          >
+            Search
+          </button>
+        </form>
+      </div>
+
+      {/* ═══════════════════════════════════════
           Trending species / quick picks
           ═══════════════════════════════════════ */}
       {!hasSearched && (
@@ -361,53 +439,15 @@ export default function PlanYourTripPage() {
             ))}
           </div>
 
-          {/* Popular destinations */}
-          <p className="text-xs font-semibold uppercase tracking-widest mb-4 mt-8" style={{ color: '#8899aa' }}>
-            Popular Departures from {departureCity}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {[
-              { name: '9 Mile Bank', species: 'Yellowtail, Bluefin Tuna', time: '~45 min', img: 'https://images.unsplash.com/photo-1534575859189-5a12e2a537c9?auto=format&fit=crop&w=400&q=70' },
-              { name: 'Coronado Islands', species: 'Yellowtail, Calico Bass', time: '~1 hr', img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=70' },
-              { name: '302 / 371 Kelp', species: 'Bluefin Tuna, Yellowfin', time: '~2 hr', img: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&w=400&q=70' },
-              { name: 'Tanner / Cortez Bank', species: 'Bluefin, Yellowtail', time: '~8 hr', img: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=400&q=70' },
-            ].map((spot) => (
-              <button
-                key={spot.name}
-                onClick={() => {
-                  setHasSearched(true);
-                  setTimeout(() => {
-                    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }, 100);
-                }}
-                className="flex items-center gap-4 p-3 rounded-xl text-left transition-all duration-200 hover:brightness-110 group"
-                style={{
-                  backgroundColor: '#131b2e',
-                  border: '1px solid #1e2a42',
-                }}
-              >
-                <div
-                  className="shrink-0 w-16 h-16 rounded-lg overflow-hidden"
-                  style={{
-                    backgroundImage: `url(${spot.img})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                  }}
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate" style={{ color: '#e2e8f0' }}>
-                    {spot.name}
-                  </p>
-                  <p className="text-xs mt-0.5 truncate" style={{ color: '#00d4ff' }}>
-                    {spot.species}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: '#8899aa' }}>
-                    {spot.time} from {departureCity}
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════
+          Popular boats for key species
+          ═══════════════════════════════════════ */}
+      {!hasSearched && (
+        <div className="max-w-3xl mx-auto px-4 pb-8">
+          <PopularBoats trips={allTrips} />
         </div>
       )}
 

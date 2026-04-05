@@ -1,18 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getScoreColor } from '@/lib/utils';
 
 interface FishingScoreProps {
   score: number;
   label: string;
   size?: 'lg' | 'sm';
-}
-
-function getScoreColor(score: number): string {
-  if (score < 4) return '#ef4444';
-  if (score < 7) return '#eab308';
-  if (score < 9) return '#22c55e';
-  return '#00d4ff';
 }
 
 export default function FishingScore({ score, label, size = 'lg' }: FishingScoreProps) {
