@@ -31,7 +31,9 @@ const FETCH_TIMEOUT_MS = 10_000;
 
 const RESERVATION_URLS: { url: string; landing: string }[] = [
   { url: 'https://seaforth.fishingreservations.net/sales/',              landing: 'seaforth'   },
-  { url: 'https://pointloma.fishingreservations.net/sales/',             landing: 'point_loma' },
+  // Point Loma's fishingreservations.net uses a non-standard layout (Spry panels),
+  // so we scrape their own schedules page which uses the standard trip-cell format.
+  { url: 'https://www.pointlomasportfishing.com/schedules.php',          landing: 'point_loma' },
   { url: 'https://fishermanslanding.fishingreservations.net/resos/',     landing: 'fishermans' },
 ];
 
@@ -193,54 +195,80 @@ async function scrapeReservationPage(
   const $ = cheerio.load(html);
   const trips: LiveTrip[] = [];
 
-  // .scale-data.trip-cell contains the core trip data; fall back to .trip-cell for
-  // sites like fishermanslanding that may not include the scale-data class.
-  const tripCells = $('td.scale-data.trip-cell[data-trip-id]');
-  const selector = tripCells.length > 0 ? 'td.scale-data.trip-cell[data-trip-id]' : 'td.trip-cell[data-trip-id]';
-  $(selector).each((_i, el) => {
-    const tripId = $(el).attr('data-trip-id') ?? '';
+  // Collect all unique trip IDs.
+  // Some pages (fishingreservations.net) put all data in one td.trip-cell,
+  // while others (pointlomasportfishing.com) spread data across multiple td
+  // elements sharing the same data-trip-id. We handle both by grouping.
+  const tripIds = new Set<string>();
+  $('[data-trip-id]').each((_i, el) => {
+    const id = $(el).attr('data-trip-id');
+    if (id) tripIds.add(id);
+  });
 
-    // Boat name
-    const boatName = $(el).find('.trip-info strong').first().text().trim();
-    if (!boatName) return;
+  for (const tripId of tripIds) {
+    const els = $(`[data-trip-id="${tripId}"]`);
+
+    // Boat name: try .trip-info strong (fishingreservations.net),
+    // then td.trip-name strong (landing site format)
+    let boatName = els.find('.trip-info strong').first().text().trim();
+    if (!boatName) {
+      boatName = els.filter('.trip-name').find('strong').first().text().trim();
+    }
+    if (!boatName) {
+      boatName = els.find('strong').first().text().trim();
+    }
+    if (!boatName) continue;
 
     // Trip type / duration
-    const duration = extractTripType($(el).find('.trip-info').first(), $);
+    let duration = '';
+    const tripInfoEl = els.find('.trip-info').first();
+    if (tripInfoEl.length) {
+      duration = extractTripType(tripInfoEl, $);
+    } else {
+      const tripNameEl = els.filter('.trip-name').first();
+      if (tripNameEl.length) {
+        const nameHtml = tripNameEl.html() || '';
+        const afterBr = nameHtml.split(/<br\s*\/?>/i)[1] || '';
+        duration = $('<div>').html(afterBr).text().trim();
+      }
+    }
 
     // Skip non-fishing trips
-    if (isNonFishing(duration)) return;
+    if (isNonFishing(duration)) continue;
 
-    // Departure: first line is date, second line is time
-    const departText = $(el).find('.trip-depart').text().trim();
+    // Find data fields across all elements with this trip ID
+    const departText = els.find('.trip-depart').text().trim();
     const departLines = departText.split(/\s*\n\s*|\s*<br\s*\/?>\s*/i).map((s) => s.trim()).filter(Boolean);
-    // departLines[0] = "Fri. 4-3-2026", departLines[1] = "12:30 PM" (approximately)
     const departureDateRaw = departLines[0] ?? '';
     const departureTimeRaw = departLines[1] ?? '';
     const departureDate = parseDepartureDate(departureDateRaw);
-    // Time is whatever remains after the date chunk
     const departureTime = departureTimeRaw || departText.replace(departureDateRaw, '').trim();
 
     // Max anglers
-    const maxAnglersText = $(el).find('.trip-load').text().trim();
+    const maxAnglersText = els.find('.trip-load').text().trim();
     const maxAnglers = parseInt(maxAnglersText, 10) || 0;
 
     // Price
-    const priceText = $(el).find('.trip-price').text().trim();
+    const priceText = els.find('.trip-price').text().trim();
     const pricePerPerson = parsePrice(priceText);
 
     // Spots left
-    const spotsText = $(el).find('.trip-spots').text().trim();
+    const spotsText = els.find('.trip-spots').text().trim();
     const spotsLeft = parseSpotsLeft(spotsText);
 
-    // Description: look for the adjacent .trip-comments td with the same trip-id
-    // It's a sibling <td> with the same data-trip-id but without .scale-data
+    // Description
     const commentCell = $(`td.trip-cell:not(.scale-data)[data-trip-id="${tripId}"]`);
     const description = commentCell.find('.trip-comments').text().trim();
 
     const status = deriveStatus(spotsLeft, description);
 
-    // Skip trips with no valid price (parsePrice returns -1 for unparseable)
-    if (pricePerPerson <= 0) return;
+    // Skip trips with no valid price
+    if (pricePerPerson <= 0) continue;
+
+    // Build booking URL — use the original booking link if available
+    let bookingUrl = tripId ? `${baseUrl}/user.php?trip_id=${tripId}` : url;
+    const bookingLink = els.find('a[href*="trip_id"]').first().attr('href');
+    if (bookingLink) bookingUrl = bookingLink;
 
     trips.push({
       id: crypto.randomUUID(),
@@ -256,10 +284,10 @@ async function scrapeReservationPage(
       description,
       targetSpecies: inferTargetSpecies(duration),
       status,
-      bookingUrl: tripId ? `${baseUrl}/user.php?trip_id=${tripId}` : url,
+      bookingUrl,
       scrapedAt,
     });
-  });
+  }
 
   return trips;
 }
