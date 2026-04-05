@@ -4,13 +4,6 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from './AuthProvider';
 
-function getInitials(displayName: string | null, email: string | undefined): string {
-  const source = displayName || email || '?';
-  const parts = source.split(/[\s@]+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return source.slice(0, 2).toUpperCase();
-}
-
 export default function UserMenu() {
   const { user, profile, signOut } = useAuth();
   const [open, setOpen] = useState(false);
@@ -28,7 +21,6 @@ export default function UserMenu() {
 
   if (!user) return null;
 
-  const initials = getInitials(profile?.display_name ?? null, user.email);
   const displayName = profile?.display_name || user.email?.split('@')[0] || 'User';
 
   return (
@@ -38,12 +30,14 @@ export default function UserMenu() {
         className="flex items-center gap-1.5 cursor-pointer"
         aria-label="User menu"
       >
-        <div
-          className="w-[30px] h-[30px] rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-          style={{ backgroundColor: '#1e2a42', border: '2px solid #00d4ff', color: '#00d4ff' }}
-        >
-          {initials}
-        </div>
+        <img
+          src={`/avatars/${profile?.avatar_key ?? 'captain'}.svg`}
+          alt=""
+          width={30}
+          height={30}
+          className="rounded-full shrink-0"
+          style={{ border: '2px solid #00d4ff', imageRendering: 'pixelated' }}
+        />
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0">
           <path d="M2.5 4.5L6 8L9.5 4.5" stroke="#8899aa" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
@@ -62,6 +56,13 @@ export default function UserMenu() {
 
           {/* Nav links */}
           <div className="py-1">
+            <Link
+              href="/profile"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-[#e2e8f0] hover:bg-[#1e2a4233] transition-colors"
+            >
+              <span style={{ color: '#00d4ff' }}>&#9881;</span> Profile
+            </Link>
             <Link
               href="/my-boats"
               onClick={() => setOpen(false)}
