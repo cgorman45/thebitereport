@@ -51,3 +51,4 @@ ais-server/node_modules/
 
 # Claude config
 .claude/
+mobile/node_modules/
