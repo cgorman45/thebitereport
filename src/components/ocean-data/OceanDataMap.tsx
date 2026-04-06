@@ -47,6 +47,8 @@ export default function OceanDataMap() {
     'kelp-markers': false,
     'kelp-polygons': false,
     'kelp-heatmap': false,
+    'drift-heatmap': false,
+    'current-vectors': false,
   });
 
   const [loading, setLoading] = useState<Record<string, boolean>>({
@@ -57,11 +59,14 @@ export default function OceanDataMap() {
     'kelp-markers': false,
     'kelp-polygons': false,
     'kelp-heatmap': false,
+    'drift-heatmap': false,
+    'current-vectors': false,
   });
 
   const [dataTimestamp, setDataTimestamp] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [hasKelpData, setHasKelpData] = useState(false);
+  const [hasDriftData, setHasDriftData] = useState(false);
   const [kelpPopup, setKelpPopup] = useState<KelpPopupState | null>(null);
 
   const mapLoadedRef = useRef(false);
@@ -76,6 +81,23 @@ export default function OceanDataMap() {
       .then((geojson: GeoJSON.FeatureCollection | null) => {
         if (geojson && geojson.features && geojson.features.length > 0) {
           setHasKelpData(true);
+        }
+      })
+      .catch(() => {
+        // Silently ignore
+      });
+  }, []);
+
+  // Check for drift data on mount
+  useEffect(() => {
+    fetch('/api/ocean-data/current-vectors')
+      .then((res) => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then((geojson: GeoJSON.FeatureCollection | null) => {
+        if (geojson && geojson.features && geojson.features.length > 0) {
+          setHasDriftData(true);
         }
       })
       .catch(() => {
@@ -283,6 +305,75 @@ export default function OceanDataMap() {
               map.setPaintProperty('kelp-heatmap', 'raster-opacity', 0);
             }
           }
+        } else if (layerId === 'drift-heatmap') {
+          if (turningOn) {
+            // Check if data is available (204 = no data)
+            const res = await fetch('/api/ocean-data/drift-heatmap', { method: 'HEAD' });
+            if (res.status === 204) {
+              // No data, revert toggle
+              setLayers((prev) => ({ ...prev, [layerId]: false }));
+            } else if (map.getSource('drift-heatmap-source')) {
+              if (map.getLayer('drift-heatmap')) {
+                map.setPaintProperty('drift-heatmap', 'raster-opacity', 0.7);
+              }
+            } else {
+              map.addSource('drift-heatmap-source', {
+                type: 'image',
+                url: '/api/ocean-data/drift-heatmap',
+                coordinates: [[-121, 35], [-117, 35], [-117, 32], [-121, 32]],
+              });
+              map.addLayer({
+                id: 'drift-heatmap',
+                type: 'raster',
+                source: 'drift-heatmap-source',
+                paint: { 'raster-opacity': 0.7 },
+                minzoom: 6,
+                maxzoom: 12,
+              });
+            }
+          } else {
+            if (map.getLayer('drift-heatmap')) {
+              map.setPaintProperty('drift-heatmap', 'raster-opacity', 0);
+            }
+          }
+        } else if (layerId === 'current-vectors') {
+          if (turningOn) {
+            const res = await fetch('/api/ocean-data/current-vectors');
+            if (!res.ok) throw new Error('Failed to fetch current vectors');
+            const geojson: GeoJSON.FeatureCollection = await res.json();
+
+            if (map.getSource('current-vectors-source')) {
+              (map.getSource('current-vectors-source') as mapboxgl.GeoJSONSource).setData(geojson);
+              if (map.getLayer('current-vectors-layer')) {
+                map.setPaintProperty('current-vectors-layer', 'line-opacity', 0.8);
+              }
+            } else {
+              map.addSource('current-vectors-source', {
+                type: 'geojson',
+                data: geojson,
+              });
+              map.addLayer({
+                id: 'current-vectors-layer',
+                type: 'line',
+                source: 'current-vectors-source',
+                paint: {
+                  'line-color': [
+                    'interpolate',
+                    ['linear'],
+                    ['get', 'speed_knots'],
+                    0, '#06b6d4',
+                    2, '#ec4899',
+                  ],
+                  'line-width': 2,
+                  'line-opacity': 0.8,
+                },
+              });
+            }
+          } else {
+            if (map.getLayer('current-vectors-layer')) {
+              map.setPaintProperty('current-vectors-layer', 'line-opacity', 0);
+            }
+          }
         } else if (layerId === 'breaks') {
           const id = layerId as LayerId;
           if (turningOn) {
@@ -339,13 +430,15 @@ export default function OceanDataMap() {
     [layers, fetchTimestamp]
   );
 
-  const activeColorScale: 'sst' | 'chlorophyll' | 'kelp-heatmap' | null =
+  const activeColorScale: 'sst' | 'chlorophyll' | 'kelp-heatmap' | 'drift-heatmap' | null =
     layers.sst || layers['goes-sst']
       ? 'sst'
       : layers.chlorophyll
       ? 'chlorophyll'
       : layers['kelp-heatmap']
       ? 'kelp-heatmap'
+      : layers['drift-heatmap']
+      ? 'drift-heatmap'
       : null;
 
   return (
@@ -395,7 +488,7 @@ export default function OceanDataMap() {
       </div>
 
       <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
-        <LayerPanel layers={layers} loading={loading} onToggle={handleToggle} hasKelpData={hasKelpData} />
+        <LayerPanel layers={layers} loading={loading} onToggle={handleToggle} hasKelpData={hasKelpData} hasDriftData={hasDriftData} />
       </div>
 
       {activeColorScale && (

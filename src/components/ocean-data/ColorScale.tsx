@@ -1,7 +1,7 @@
 'use client';
 
 interface ColorScaleProps {
-  activeLayer: 'sst' | 'chlorophyll' | 'kelp-heatmap' | null;
+  activeLayer: 'sst' | 'chlorophyll' | 'kelp-heatmap' | 'drift-heatmap' | null;
 }
 
 const PANEL_STYLE: React.CSSProperties = {
@@ -34,6 +34,12 @@ const SCALES = {
     minLabel: 'Low',
     maxLabel: 'High',
     title: 'Kelp Density',
+  },
+  'drift-heatmap': {
+    gradient: 'linear-gradient(90deg, rgba(128,0,255,0.2), #a855f7, #ec4899, #ff0000)',
+    minLabel: 'Low',
+    maxLabel: 'High',
+    title: 'DRIFT PROBABILITY',
   },
 };
 

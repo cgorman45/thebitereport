@@ -5,6 +5,7 @@ interface LayerPanelProps {
   loading: Record<string, boolean>;
   onToggle: (layerId: string) => void;
   hasKelpData: boolean;
+  hasDriftData: boolean;
 }
 
 const PANEL_STYLE: React.CSSProperties = {
@@ -30,6 +31,17 @@ const LIVE_LAYERS: LiveLayer[] = [
   { id: 'chlorophyll', color: '#3b82f6', label: 'Chlorophyll-a' },
   { id: 'breaks', color: '#ff6b35', label: 'Current Breaks' },
   { id: 'goes-sst', color: '#8b5cf6', label: 'GOES Hourly SST' },
+];
+
+interface DriftLayer {
+  id: string;
+  color: string;
+  label: string;
+}
+
+const DRIFT_LAYERS: DriftLayer[] = [
+  { id: 'drift-heatmap', color: '#a855f7', label: 'Drift Heatmap' },
+  { id: 'current-vectors', color: '#ec4899', label: 'Current Vectors' },
 ];
 
 interface KelpLayer {
@@ -127,7 +139,7 @@ function Divider() {
   return <div style={{ height: 1, background: '#1e2a42', margin: '12px 0' }} />;
 }
 
-export default function LayerPanel({ layers, loading, onToggle, hasKelpData }: LayerPanelProps) {
+export default function LayerPanel({ layers, loading, onToggle, hasKelpData, hasDriftData }: LayerPanelProps) {
   return (
     <>
       <style>{`@keyframes ocean-spin { to { transform: rotate(360deg); } }`}</style>
@@ -204,16 +216,36 @@ export default function LayerPanel({ layers, loading, onToggle, hasKelpData }: L
 
         {/* Section 3: Drift Prediction */}
         <SectionLabel>Drift Prediction</SectionLabel>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.5 }}>
-          {['Drift Heatmap', 'Current Vectors'].map((label) => (
-            <div
-              key={label}
-              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {DRIFT_LAYERS.map(({ id, color, label }) => (
+            <button
+              key={id}
+              onClick={() => onToggle(id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: '#e2e8f0',
+                width: '100%',
+                textAlign: 'left',
+              }}
             >
-              <Checkbox checked={false} color="#3a4a6a" />
+              {loading[id] ? (
+                <Spinner color={color} />
+              ) : (
+                <Checkbox checked={!!layers[id]} color={color} />
+              )}
               <span style={{ fontSize: 12, flex: 1 }}>{label}</span>
-              <Badge label="CAPTAIN" color="#a855f7" bg="#a855f715" />
-            </div>
+              {hasDriftData ? (
+                <Badge label="LIVE" color="#22c55e" bg="#22c55e15" />
+              ) : (
+                <Badge label="No Data" color="#8899aa" bg="#8899aa15" />
+              )}
+            </button>
           ))}
         </div>
       </div>
