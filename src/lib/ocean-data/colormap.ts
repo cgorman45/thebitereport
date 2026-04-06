@@ -82,3 +82,28 @@ export function kelpHeatmapColormap(density: number, maxDensity: number): RGBA {
   }
   return stops[stops.length - 1][1];
 }
+
+export function driftColormap(probability: number): RGBA {
+  if (isNaN(probability) || probability <= 0) return [0, 0, 0, 0];
+  const t = Math.max(0, Math.min(1, probability));
+  const stops: [number, RGBA][] = [
+    [0.0, [128, 0, 255, 40]],
+    [0.33, [168, 85, 247, 140]],
+    [0.66, [236, 72, 153, 190]],
+    [1.0, [255, 0, 0, 220]],
+  ];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0, c0] = stops[i];
+    const [t1, c1] = stops[i + 1];
+    if (t >= t0 && t <= t1) {
+      const st = (t - t0) / (t1 - t0);
+      return [
+        Math.round(c0[0] + (c1[0] - c0[0]) * st),
+        Math.round(c0[1] + (c1[1] - c0[1]) * st),
+        Math.round(c0[2] + (c1[2] - c0[2]) * st),
+        Math.round(c0[3] + (c1[3] - c0[3]) * st),
+      ];
+    }
+  }
+  return stops[stops.length - 1][1];
+}
