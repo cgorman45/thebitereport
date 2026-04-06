@@ -10,6 +10,7 @@ import UserMenu from './auth/UserMenu';
 const NAV_LINKS = [
   { href: '/', label: 'Bite Report' },
   { href: '/fleet-tracker', label: 'Fleet Map' },
+  { href: '/ocean-data', label: 'Ocean Data' },
   { href: '/plan-your-trip', label: 'Plan Trip' },
   { href: '/weather', label: 'Weather' },
   { href: '/gear', label: 'Gear' },
