@@ -1,7 +1,7 @@
 'use client';
 
 interface ColorScaleProps {
-  activeLayer: 'sst' | 'chlorophyll' | null;
+  activeLayer: 'sst' | 'chlorophyll' | 'kelp-heatmap' | null;
 }
 
 const PANEL_STYLE: React.CSSProperties = {
@@ -28,6 +28,12 @@ const SCALES = {
     minLabel: '0 mg/m³',
     maxLabel: '10 mg/m³',
     title: 'Chlorophyll-a',
+  },
+  'kelp-heatmap': {
+    gradient: 'linear-gradient(to right, transparent, #eab308, #f97316, #ef4444)',
+    minLabel: 'Low',
+    maxLabel: 'High',
+    title: 'Kelp Density',
   },
 };
 

@@ -4,6 +4,7 @@ interface LayerPanelProps {
   layers: Record<string, boolean>;
   loading: Record<string, boolean>;
   onToggle: (layerId: string) => void;
+  hasKelpData: boolean;
 }
 
 const PANEL_STYLE: React.CSSProperties = {
@@ -29,6 +30,18 @@ const LIVE_LAYERS: LiveLayer[] = [
   { id: 'chlorophyll', color: '#3b82f6', label: 'Chlorophyll-a' },
   { id: 'breaks', color: '#ff6b35', label: 'Current Breaks' },
   { id: 'goes-sst', color: '#8b5cf6', label: 'GOES Hourly SST' },
+];
+
+interface KelpLayer {
+  id: string;
+  color: string;
+  label: string;
+}
+
+const KELP_LAYERS: KelpLayer[] = [
+  { id: 'kelp-markers', color: '#eab308', label: 'Kelp Detections' },
+  { id: 'kelp-polygons', color: '#22c55e', label: 'Kelp Outlines' },
+  { id: 'kelp-heatmap', color: '#f97316', label: 'Kelp Heatmap' },
 ];
 
 function Spinner({ color }: { color: string }) {
@@ -114,7 +127,7 @@ function Divider() {
   return <div style={{ height: 1, background: '#1e2a42', margin: '12px 0' }} />;
 }
 
-export default function LayerPanel({ layers, loading, onToggle }: LayerPanelProps) {
+export default function LayerPanel({ layers, loading, onToggle, hasKelpData }: LayerPanelProps) {
   return (
     <>
       <style>{`@keyframes ocean-spin { to { transform: rotate(360deg); } }`}</style>
@@ -154,16 +167,36 @@ export default function LayerPanel({ layers, loading, onToggle }: LayerPanelProp
 
         {/* Section 2: Kelp Detection */}
         <SectionLabel>Kelp Detection</SectionLabel>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.5 }}>
-          {['Kelp Mat Markers', 'Satellite Imagery'].map((label) => (
-            <div
-              key={label}
-              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {KELP_LAYERS.map(({ id, color, label }) => (
+            <button
+              key={id}
+              onClick={() => onToggle(id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: '#e2e8f0',
+                width: '100%',
+                textAlign: 'left',
+              }}
             >
-              <Checkbox checked={false} color="#3a4a6a" />
+              {loading[id] ? (
+                <Spinner color={color} />
+              ) : (
+                <Checkbox checked={!!layers[id]} color={color} />
+              )}
               <span style={{ fontSize: 12, flex: 1 }}>{label}</span>
-              <Badge label="PRO" color="#f97316" bg="#f9731615" />
-            </div>
+              {hasKelpData ? (
+                <Badge label="LIVE" color="#22c55e" bg="#22c55e15" />
+              ) : (
+                <Badge label="No Data" color="#8899aa" bg="#8899aa15" />
+              )}
+            </button>
           ))}
         </div>
 
