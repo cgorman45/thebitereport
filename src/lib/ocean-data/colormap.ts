@@ -56,3 +56,29 @@ export function chlorophyllColormap(value: number): RGBA {
 export function cToF(celsius: number): number {
   return celsius * 9 / 5 + 32;
 }
+
+export function kelpHeatmapColormap(density: number, maxDensity: number): RGBA {
+  if (isNaN(density) || density <= 0) return [0, 0, 0, 0];
+  const t = Math.max(0, Math.min(1, density / maxDensity));
+  // transparent → yellow → orange → red
+  const stops: [number, RGBA][] = [
+    [0.0, [255, 255, 0, 40]],
+    [0.33, [255, 200, 0, 140]],
+    [0.66, [255, 140, 0, 190]],
+    [1.0, [255, 0, 0, 220]],
+  ];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const [t0, c0] = stops[i];
+    const [t1, c1] = stops[i + 1];
+    if (t >= t0 && t <= t1) {
+      const st = (t - t0) / (t1 - t0);
+      return [
+        Math.round(c0[0] + (c1[0] - c0[0]) * st),
+        Math.round(c0[1] + (c1[1] - c0[1]) * st),
+        Math.round(c0[2] + (c1[2] - c0[2]) * st),
+        Math.round(c0[3] + (c1[3] - c0[3]) * st),
+      ];
+    }
+  }
+  return stops[stops.length - 1][1];
+}
