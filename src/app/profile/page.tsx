@@ -10,6 +10,7 @@ import NotificationsTab from '@/components/profile/NotificationsTab';
 import AccountTab from '@/components/profile/AccountTab';
 import { getAvatarUrl } from '@/lib/avatars';
 import { getSupabase } from '@/lib/supabase/client';
+import ContributionBadge from '@/components/ocean-data/ContributionBadge';
 import type { ScheduledTrip } from '@/lib/trips/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -39,6 +40,13 @@ interface TripWatch {
 }
 
 type ActiveTab = 'trips' | 'notifications' | 'account';
+
+interface ContributionData {
+  contribution_score: number;
+  sightings_count: number;
+  verifications_count: number;
+  photos_count: number;
+}
 
 // ─── Default notification prefs ───────────────────────────────────────────────
 
@@ -144,6 +152,7 @@ export default function ProfilePage() {
   const [allTrips, setAllTrips] = useState<ScheduledTrip[]>([]);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [contributionData, setContributionData] = useState<ContributionData | null>(null);
 
   // Auth guard
   useEffect(() => {
@@ -183,12 +192,22 @@ export default function ProfilePage() {
       setAvatarKey(profile.avatarKey ?? 'captain');
       setTripWatchData(Array.isArray(watches) ? watches : []);
       setAllTrips(Array.isArray(trips) ? trips : []);
+
+      // Fetch contribution data
+      if (user) {
+        const { data: contrib } = await getSupabase()
+          .from('user_contributions')
+          .select('contribution_score, sightings_count, verifications_count, photos_count')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (contrib) setContributionData(contrib);
+      }
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : 'Unable to load profile');
     } finally {
       setLoadingProfile(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (user && !loading) {
@@ -397,6 +416,14 @@ export default function ProfilePage() {
               <StatBadge value={favorites.size} label="Boats" />
               <StatBadge value={activeWatchCount} label="Watching" />
               <StatBadge value={pastWatchCount} label="Past" />
+              {contributionData && contributionData.contribution_score > 0 && (
+                <ContributionBadge
+                  score={contributionData.contribution_score}
+                  sightings={contributionData.sightings_count}
+                  verifications={contributionData.verifications_count}
+                  photos={contributionData.photos_count}
+                />
+              )}
             </div>
 
             {/* Tabs */}
