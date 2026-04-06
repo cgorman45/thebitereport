@@ -1,0 +1,11 @@
+-- Run manually in Supabase dashboard or via CLI:
+-- Create a public bucket named 'kelp-photos'
+-- Max file size: 10MB
+-- Allowed MIME types: image/jpeg, image/png, image/heic, video/mp4, video/quicktime
+--
+-- Storage policies:
+-- SELECT: public (anyone can view photos)
+-- INSERT: authenticated users only
+-- DELETE: owner only (match auth.uid() to path prefix)
+--
+-- Bucket path convention: {user_id}/{sighting_id}/{filename}
