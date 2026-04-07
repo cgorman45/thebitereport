@@ -3,9 +3,10 @@ import logging
 import numpy as np
 from scipy import ndimage
 from shapely.geometry import shape, mapping
-from shapely.ops import unary_union
+from shapely.ops import unary_union, transform as shapely_transform
 import rasterio
 from rasterio.features import shapes
+from pyproj import Transformer
 
 log = logging.getLogger('kelp-detection')
 
@@ -19,6 +20,9 @@ THRESHOLDS = {
 # Minimum cluster size in pixels (filter noise)
 MIN_CLUSTER_PIXELS = 5
 
+# Maximum area — anything larger is probably cloud shadow or land, not kelp
+MAX_CLUSTER_PIXELS = 5000  # 5000 * 100m² = 500,000m² = 50 hectares
+
 
 def detect(
     indices: dict[str, np.ndarray],
@@ -28,6 +32,7 @@ def detect(
     """
     Apply threshold detection to spectral indices.
     Returns list of detection dicts with polygon, centroid, area, confidence.
+    All coordinates are in EPSG:4326 (WGS84 lat/lng).
     """
     ndvi = indices['ndvi']
     fai = indices['fai']
@@ -50,7 +55,17 @@ def detect(
     labeled, num_features = ndimage.label(mask)
     log.info(f'Found {num_features} clusters')
 
-    # Filter small clusters
+    # Set up CRS transformer if source isn't WGS84
+    need_reproject = crs and crs != 'EPSG:4326' and not crs.startswith('4326')
+    transformer = None
+    if need_reproject:
+        try:
+            transformer = Transformer.from_crs(crs, 'EPSG:4326', always_xy=True)
+            log.info(f'Will reproject from {crs} to EPSG:4326')
+        except Exception as e:
+            log.warning(f'Could not create CRS transformer: {e}')
+            transformer = None
+
     detections = []
 
     for cluster_id in range(1, num_features + 1):
@@ -58,6 +73,8 @@ def detect(
         pixel_count = cluster_mask.sum()
 
         if pixel_count < MIN_CLUSTER_PIXELS:
+            continue
+        if pixel_count > MAX_CLUSTER_PIXELS:
             continue
 
         # Compute mean index values for confidence scoring
@@ -79,16 +96,25 @@ def detect(
             geom_gen = shapes(cluster_uint8, mask=cluster_mask, transform=transform)
             polygons = [shape(geom) for geom, val in geom_gen if val == 1]
         else:
-            # Fallback: pixel coordinates (will need manual georeferencing)
+            # Fallback: pixel coordinates
             ys, xs = np.where(cluster_mask)
             from shapely.geometry import box
-            polygons = [box(xs.min(), ys.min(), xs.max(), ys.max())]
+            polygons = [box(float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max()))]
 
         if not polygons:
             continue
 
         merged = unary_union(polygons)
+
+        # Reproject to WGS84 if needed (Sentinel-2 is usually in UTM)
+        if transformer:
+            merged = shapely_transform(transformer.transform, merged)
+
         centroid = merged.centroid
+
+        # Validate coordinates are in SoCal region
+        if not (32.0 <= centroid.y <= 35.0 and -121.0 <= centroid.x <= -117.0):
+            continue
 
         # Area estimate (10m pixel = 100m²)
         area_m2 = float(pixel_count * 100)

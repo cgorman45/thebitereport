@@ -2,11 +2,13 @@
 import os
 import logging
 import tempfile
+import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
 import rasterio
+from rasterio.transform import Affine
 import numpy as np
 
 log = logging.getLogger('kelp-detection')
@@ -102,10 +104,13 @@ def search_scenes(since: str | None = None, max_cloud: float = 20.0) -> list[dic
     return scenes
 
 
-def download_bands(scene_id: str, work_dir: Path) -> dict[str, np.ndarray]:
+def download_bands(scene_id: str, work_dir: Path) -> dict:
     """
     Download and read required bands for a scene.
-    Returns dict of band name → numpy array.
+    Returns dict with:
+      - 'bands': dict of band name → numpy array
+      - 'transform': rasterio Affine transform for georeferencing
+      - 'crs': coordinate reference system string
     """
     token = get_access_token()
 
@@ -126,16 +131,18 @@ def download_bands(scene_id: str, work_dir: Path) -> dict[str, np.ndarray]:
     log.info(f'Downloaded scene {scene_id} ({zip_path.stat().st_size / 1e6:.1f} MB)')
 
     # Extract and read bands
-    import zipfile
     extract_dir = work_dir / 'extracted'
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(extract_dir)
 
     bands = {}
     target_shape = None
+    transform = None
+    crs = None
 
     for band_name in BANDS:
         # Find the band file in the extracted directory
+        # Sentinel-2 L2A structure: .SAFE/GRANULE/*/IMG_DATA/R10m/*_B04_10m.jp2
         band_files = list(extract_dir.rglob(f'*_{band_name}_*.jp2'))
         if not band_files:
             band_files = list(extract_dir.rglob(f'*{band_name}*.jp2'))
@@ -147,17 +154,27 @@ def download_bands(scene_id: str, work_dir: Path) -> dict[str, np.ndarray]:
         with rasterio.open(band_files[0]) as src:
             data = src.read(1).astype(np.float32)
 
-            # Store 10m resolution shape as target
+            # Store 10m resolution shape and transform as reference
             if BANDS[band_name]['resolution'] == 10 and target_shape is None:
                 target_shape = data.shape
+                transform = src.transform
+                crs = str(src.crs)
 
             bands[band_name] = data
 
-    # Resample 20m bands to 10m
+    # Resample 20m bands to 10m resolution
     if target_shape and 'B11' in bands:
         from scipy.ndimage import zoom
         scale = target_shape[0] / bands['B11'].shape[0]
         bands['B11'] = zoom(bands['B11'], scale, order=1)
+        log.info(f'Resampled B11 from 20m to 10m (scale={scale:.1f})')
 
-    log.info(f'Read {len(bands)} bands from scene {scene_id}')
-    return bands
+    # Clean up zip to save disk space
+    zip_path.unlink(missing_ok=True)
+
+    log.info(f'Read {len(bands)} bands from scene {scene_id}, shape={target_shape}, crs={crs}')
+    return {
+        'bands': bands,
+        'transform': transform,
+        'crs': crs or 'EPSG:32611',  # Default to UTM Zone 11N (SoCal)
+    }

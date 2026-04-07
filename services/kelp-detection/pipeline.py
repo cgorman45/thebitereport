@@ -2,7 +2,6 @@
 import logging
 import tempfile
 from pathlib import Path
-from datetime import datetime
 
 from copernicus import search_scenes, download_bands
 from indices import compute_all_indices
@@ -19,7 +18,7 @@ def run_pipeline() -> dict:
     1. Check for new Sentinel-2 scenes
     2. Download bands
     3. Compute spectral indices
-    4. Run threshold detection
+    4. Run threshold detection (with georeferencing)
     5. Refine with ML (if available)
     6. Write to Supabase
 
@@ -46,8 +45,11 @@ def run_pipeline() -> dict:
             with tempfile.TemporaryDirectory() as tmp:
                 work_dir = Path(tmp)
 
-                # Download bands
-                bands = download_bands(scene['id'], work_dir)
+                # Download bands + georeferencing info
+                result = download_bands(scene['id'], work_dir)
+                bands = result['bands']
+                transform = result['transform']
+                crs = result['crs']
 
                 if len(bands) < 4:
                     log.warning(f'Scene {scene["name"]}: only {len(bands)} bands available, skipping')
@@ -56,10 +58,8 @@ def run_pipeline() -> dict:
                 # Compute spectral indices
                 indices_data = compute_all_indices(bands)
 
-                # Run threshold detection
-                # Note: transform would come from rasterio dataset — for now use None
-                # and rely on Copernicus scene metadata for georeferencing
-                detections = detect(indices_data)
+                # Run threshold detection with georeferencing
+                detections = detect(indices_data, transform=transform, crs=crs)
 
                 # Refine with ML
                 detections = refine_detections(detections, bands)
@@ -73,6 +73,7 @@ def run_pipeline() -> dict:
                     # Write to Supabase
                     count = write_detections(detections)
                     total_detections += count
+                    log.info(f'Scene {scene["name"]}: {count} kelp mats detected')
                 else:
                     log.info(f'No kelp detections in scene {scene["name"]}')
 

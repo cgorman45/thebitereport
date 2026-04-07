@@ -6,3 +6,4 @@ shapely>=2.0.0
 ultralytics>=8.0.0
 supabase>=2.0.0
 requests>=2.31.0
+pyproj>=3.6.0
