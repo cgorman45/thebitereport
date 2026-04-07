@@ -5,7 +5,7 @@ export interface GeoPoint {
 
 export interface Detection extends GeoPoint {
   id: string;
-  type: 'kelp-satellite' | 'kelp-sighting' | 'current-break' | 'drift-zone';
+  type: 'kelp-satellite' | 'kelp-sighting' | 'current-break' | 'drift-zone' | 'fish-report';
   label: string;
   confidence?: number;
 }

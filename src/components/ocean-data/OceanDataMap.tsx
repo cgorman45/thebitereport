@@ -11,6 +11,11 @@ import DataInfo from './DataInfo';
 import KelpPopup from './KelpPopup';
 import ReportKelpButton from './ReportKelpButton';
 import ReportKelpModal from './ReportKelpModal';
+import ReportFishButton from './ReportFishButton';
+import ReportFishModal from './ReportFishModal';
+import FishReportPopup from './FishReportPopup';
+import FishActivityFeed from './FishActivityFeed';
+import type { FishReport } from './FishActivityFeed';
 import SightingPopup from './SightingPopup';
 import CommunityFeed from './CommunityFeed';
 import { useGPSTracking } from './useGPSTracking';
@@ -19,6 +24,27 @@ import GPSToggle from './GPSToggle';
 import type { Detection } from '@/lib/ocean-data/proximity';
 import { getSupabase } from '@/lib/supabase/client';
 import { useOptionalAuth } from '@/components/auth/AuthProvider';
+
+const QUANTITY_LABELS: Record<string, string> = {
+  'few': 'Few',
+  'some': 'Some',
+  'lots': 'Lots',
+  'wide-open': 'Wide Open!',
+};
+
+const FISH_SPECIES_COLORS: Record<string, string> = {
+  'yellowtail': '#eab308',
+  'bluefin tuna': '#3b82f6',
+  'yellowfin tuna': '#f59e0b',
+  'calico bass': '#22c55e',
+  'white seabass': '#e2e8f0',
+  'barracuda': '#8b5cf6',
+  'dorado': '#22d3ee',
+  'bonito': '#06b6d4',
+  'rockfish': '#ef4444',
+  'halibut': '#84cc16',
+  'sheephead': '#f97316',
+};
 
 type RasterLayerId = 'sst' | 'chlorophyll' | 'goes-sst';
 type LayerId = RasterLayerId | 'breaks';
@@ -63,6 +89,10 @@ interface SightingPopupState {
   sighting: KelpSighting;
 }
 
+interface FishReportPopupState {
+  report: FishReport;
+}
+
 export default function OceanDataMap() {
   const mapRef = useRef<MapRef>(null);
   const auth = useOptionalAuth();
@@ -81,6 +111,7 @@ export default function OceanDataMap() {
     'windy-waves': false,
     'windy-currents': false,
     'windy-swell': false,
+    'fish-reports': true,
   });
 
   const [loading, setLoading] = useState<Record<string, boolean>>({
@@ -97,6 +128,7 @@ export default function OceanDataMap() {
     'windy-waves': false,
     'windy-currents': false,
     'windy-swell': false,
+    'fish-reports': false,
   });
 
   const [dataTimestamp, setDataTimestamp] = useState<string | null>(null);
@@ -114,8 +146,18 @@ export default function OceanDataMap() {
   const [sightingPopup, setSightingPopup] = useState<SightingPopupState | null>(null);
   const [userVerifications, setUserVerifications] = useState<Set<string>>(new Set());
 
+  // Fish report state
+  const [fishReports, setFishReports] = useState<FishReport[]>([]);
+  const [fishReportMode, setFishReportMode] = useState(false);
+  const [fishReportCoords, setFishReportCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [showFishReportModal, setShowFishReportModal] = useState(false);
+  const [fishReportPopup, setFishReportPopup] = useState<FishReportPopupState | null>(null);
+  const [showFishFeed, setShowFishFeed] = useState(false);
+  const [userFishVerifications, setUserFishVerifications] = useState<Set<string>>(new Set());
+
   const mapLoadedRef = useRef(false);
   const sightingsRef = useRef<KelpSighting[]>([]);
+  const fishReportsRef = useRef<FishReport[]>([]);
 
   // Build detections list for proximity alerts from all data sources
   const proximityDetections: Detection[] = useMemo(() => {
@@ -133,16 +175,33 @@ export default function OceanDataMap() {
         });
       }
     }
+    // Add fish reports
+    for (const r of fishReports) {
+      if (r.status !== 'expired') {
+        dets.push({
+          id: `fish-${r.id}`,
+          lat: r.lat,
+          lng: r.lng,
+          type: 'fish-report' as Detection['type'],
+          label: `${r.species} — ${QUANTITY_LABELS[r.quantity] ?? r.quantity}${r.bait ? ` on ${r.bait}` : ''}`,
+          confidence: r.verification_count >= 3 ? 0.95 : 0.6,
+        });
+      }
+    }
     return dets;
-  }, [sightings]);
+  }, [sightings, fishReports]);
 
   const { gps, alerts, alertRadius, setAlertRadius, startTracking, stopTracking, dismissAlert } =
     useGPSTracking(proximityDetections);
 
-  // Keep ref in sync for use in map event handlers
+  // Keep refs in sync for use in map event handlers
   useEffect(() => {
     sightingsRef.current = sightings;
   }, [sightings]);
+
+  useEffect(() => {
+    fishReportsRef.current = fishReports;
+  }, [fishReports]);
 
   // Fetch community sightings
   const fetchSightings = useCallback(async () => {
@@ -162,6 +221,26 @@ export default function OceanDataMap() {
     const interval = setInterval(fetchSightings, 60000);
     return () => clearInterval(interval);
   }, [fetchSightings]);
+
+  // Fetch fish reports
+  const fetchFishReports = useCallback(async () => {
+    try {
+      const res = await fetch('/api/fish-reports');
+      if (res.ok) {
+        const data = await res.json();
+        setFishReports(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // Silently ignore
+    }
+  }, []);
+
+  // On mount: fetch fish reports and refresh every 30s
+  useEffect(() => {
+    fetchFishReports();
+    const interval = setInterval(fetchFishReports, 30000);
+    return () => clearInterval(interval);
+  }, [fetchFishReports]);
 
   // Update kelp-sightings GeoJSON source when sightings change
   useEffect(() => {
@@ -185,6 +264,31 @@ export default function OceanDataMap() {
       (map.getSource('kelp-sightings-source') as mapboxgl.GeoJSONSource).setData(geojson);
     }
   }, [sightings]);
+
+  // Update fish-reports GeoJSON source when fish reports change
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map || !mapLoadedRef.current) return;
+
+    const geojson: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: fishReports.map((r) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
+        properties: {
+          id: r.id,
+          species: r.species,
+          quantity: r.quantity,
+          status: r.status,
+          verification_count: r.verification_count,
+        },
+      })),
+    };
+
+    if (map.getSource('fish-reports-source')) {
+      (map.getSource('fish-reports-source') as mapboxgl.GeoJSONSource).setData(geojson);
+    }
+  }, [fishReports]);
 
   // Update user position on the map when GPS changes
   useEffect(() => {
@@ -345,6 +449,62 @@ export default function OceanDataMap() {
       },
     });
 
+    // Add fish reports GeoJSON source and layer
+    map.addSource('fish-reports-source', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    });
+
+    map.addLayer({
+      id: 'fish-reports-layer',
+      type: 'circle',
+      source: 'fish-reports-source',
+      paint: {
+        'circle-radius': [
+          'case',
+          ['==', ['get', 'quantity'], 'wide-open'], 10,
+          ['==', ['get', 'quantity'], 'lots'], 8,
+          ['==', ['get', 'quantity'], 'some'], 6,
+          5,
+        ],
+        'circle-color': [
+          'case',
+          ['in', 'yellowtail', ['downcase', ['get', 'species']]], '#eab308',
+          ['in', 'tuna', ['downcase', ['get', 'species']]], '#3b82f6',
+          ['in', 'bass', ['downcase', ['get', 'species']]], '#22c55e',
+          '#f97316',
+        ],
+        'circle-opacity': [
+          'case',
+          ['==', ['get', 'status'], 'verified'], 0.9,
+          0.6,
+        ],
+        'circle-stroke-width': 2,
+        'circle-stroke-color': 'rgba(255,255,255,0.3)',
+      },
+    });
+
+    // Click handler for fish reports
+    map.on('click', 'fish-reports-layer', (e: MapMouseEvent & { features?: mapboxgl.MapboxGeoJSONFeature[] }) => {
+      if (!e.features || e.features.length === 0) return;
+      const feature = e.features[0];
+      const props = feature.properties as Record<string, unknown>;
+      const reportId = String(props.id ?? '');
+      const found = fishReportsRef.current.find((r) => r.id === reportId);
+      if (found) {
+        setFishReportPopup({ report: found });
+        setKelpPopup(null);
+        setSightingPopup(null);
+      }
+    });
+
+    map.on('mouseenter', 'fish-reports-layer', () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'fish-reports-layer', () => {
+      map.getCanvas().style.cursor = '';
+    });
+
     // Click handler for kelp sightings
     map.on('click', 'kelp-sightings-layer', (e: MapMouseEvent & { features?: mapboxgl.MapboxGeoJSONFeature[] }) => {
       if (!e.features || e.features.length === 0) return;
@@ -430,7 +590,11 @@ export default function OceanDataMap() {
       setLoading((prev) => ({ ...prev, [layerId]: true }));
 
       try {
-        if (layerId === 'kelp-markers') {
+        if (layerId === 'fish-reports') {
+          if (map.getLayer('fish-reports-layer')) {
+            map.setLayoutProperty('fish-reports-layer', 'visibility', turningOn ? 'visible' : 'none');
+          }
+        } else if (layerId === 'kelp-markers') {
           if (turningOn) {
             const res = await fetch('/api/ocean-data/kelp-detections');
             if (!res.ok) throw new Error('Failed to fetch kelp detections');
@@ -676,15 +840,23 @@ export default function OceanDataMap() {
     [layers, fetchTimestamp]
   );
 
-  // Map click handler for report mode
+  // Map click handler for report mode (kelp or fish)
   const handleMapClick = useCallback(
     (e: MapMouseEvent) => {
-      if (!reportMode) return;
-      setReportCoords({ lat: e.lngLat.lat, lng: e.lngLat.lng });
-      setShowReportModal(true);
-      setReportMode(false);
+      if (reportMode) {
+        setReportCoords({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+        setShowReportModal(true);
+        setReportMode(false);
+        return;
+      }
+      if (fishReportMode) {
+        setFishReportCoords({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+        setShowFishReportModal(true);
+        setFishReportMode(false);
+        return;
+      }
     },
-    [reportMode]
+    [reportMode, fishReportMode]
   );
 
   // Verify handler
@@ -735,6 +907,58 @@ export default function OceanDataMap() {
       // Silently ignore
     }
   }, [auth, sightings, userVerifications]);
+
+  // Fish report verify handler
+  const handleFishVerify = useCallback(async (reportId: string) => {
+    try {
+      const { data: { session } } = await getSupabase().auth.getSession();
+      if (!session?.access_token) {
+        auth?.openAuthModal();
+        return;
+      }
+      const res = await fetch(`/api/fish-reports/${reportId}/verify`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) return;
+
+      setUserFishVerifications((prev) => {
+        const next = new Set(prev);
+        if (next.has(reportId)) {
+          next.delete(reportId);
+        } else {
+          next.add(reportId);
+        }
+        return next;
+      });
+
+      setFishReports((prev) =>
+        prev.map((r) =>
+          r.id === reportId
+            ? {
+                ...r,
+                verification_count: userFishVerifications.has(reportId)
+                  ? r.verification_count - 1
+                  : r.verification_count + 1,
+              }
+            : r
+        )
+      );
+    } catch {
+      // Silently ignore
+    }
+  }, [auth, userFishVerifications]);
+
+  // Handle new fish report submitted
+  const handleFishReportSubmit = useCallback((_report: { id: string }) => {
+    fetchFishReports();
+  }, [fetchFishReports]);
+
+  // Navigate map to fish report location
+  const handleFishFeedClick = useCallback((lat: number, lng: number) => {
+    mapRef.current?.getMap()?.flyTo({ center: [lng, lat], zoom: 12, duration: 1200 });
+    setShowFishFeed(false);
+  }, []);
 
   // Handle new sighting submitted
   const handleSightingSubmit = useCallback((sighting: { id: string }) => {
@@ -794,7 +1018,7 @@ export default function OceanDataMap() {
       `}</style>
       <div
         style={{ position: 'relative', width: '100%', height: 'calc(100vh - 64px)' }}
-        className={reportMode ? 'odm-cursor-crosshair' : ''}
+        className={(reportMode || fishReportMode) ? 'odm-cursor-crosshair' : ''}
       >
         <Map
           ref={mapRef}
@@ -862,6 +1086,32 @@ export default function OceanDataMap() {
               />
             </Popup>
           )}
+          {/* Fish report popup */}
+          {fishReportPopup && (
+            <Popup
+              longitude={fishReportPopup.report.lng}
+              latitude={fishReportPopup.report.lat}
+              anchor="bottom"
+              onClose={() => setFishReportPopup(null)}
+              closeOnClick={false}
+              style={{ padding: 0, background: 'none', border: 'none' }}
+            >
+              <FishReportPopup
+                id={fishReportPopup.report.id}
+                species={fishReportPopup.report.species}
+                quantity={fishReportPopup.report.quantity}
+                bait={fishReportPopup.report.bait}
+                technique={fishReportPopup.report.technique}
+                description={fishReportPopup.report.description}
+                status={fishReportPopup.report.status}
+                verification_count={fishReportPopup.report.verification_count}
+                display_name={fishReportPopup.report.display_name}
+                avatar_key={fishReportPopup.report.avatar_key}
+                created_at={fishReportPopup.report.created_at}
+                onVerify={handleFishVerify}
+              />
+            </Popup>
+          )}
         </Map>
 
         {/* Windy weather overlay iframe */}
@@ -897,7 +1147,7 @@ export default function OceanDataMap() {
 
         {/* Top-right: layer panel */}
         <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 10 }}>
-          <LayerPanel layers={layers} loading={loading} onToggle={handleToggle} hasKelpData={hasKelpData} hasDriftData={hasDriftData} />
+          <LayerPanel layers={layers} loading={loading} onToggle={handleToggle} hasKelpData={hasKelpData} hasDriftData={hasDriftData} fishReportCount={fishReports.filter((r) => r.status !== 'expired').length} />
         </div>
 
         {/* Bottom-center: color scale */}
@@ -961,6 +1211,43 @@ export default function OceanDataMap() {
             Community
           </button>
 
+          {/* Fish activity feed toggle */}
+          <button
+            onClick={() => { setShowFishFeed((v) => !v); setShowFeed(false); }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: showFishFeed ? 'rgba(249,115,22,0.1)' : 'rgba(13,19,32,0.92)',
+              border: `1px solid ${showFishFeed ? '#f97316' : '#1e2a42'}`,
+              borderRadius: 10,
+              padding: '10px 14px',
+              cursor: 'pointer',
+              color: '#f97316',
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: 13,
+              fontWeight: 600,
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
+              boxShadow: showFishFeed ? '0 0 14px #f9731644' : 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6.5 12C6.5 12 3 9 2 5c3 0 5.5 2 7.5 4" fill="#f9731633" />
+              <path d="M6.5 12C6.5 12 3 15 2 19c3 0 5.5-2 7.5-4" fill="#f9731633" />
+              <path d="M6.5 12h9" />
+              <circle cx="18" cy="12" r="3" fill="#f9731444" />
+            </svg>
+            Fish Activity
+            {fishReports.filter((r) => r.status !== 'expired').length > 0 && (
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#f97316', color: '#fff', borderRadius: '50%', width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                {fishReports.filter((r) => r.status !== 'expired').length}
+              </span>
+            )}
+          </button>
+
           {/* GPS proximity toggle */}
           <GPSToggle
             enabled={gps.enabled}
@@ -974,8 +1261,21 @@ export default function OceanDataMap() {
           <ReportKelpButton
             onReport={() => {
               setReportMode(true);
+              setFishReportMode(false);
               setSightingPopup(null);
               setKelpPopup(null);
+              setFishReportPopup(null);
+            }}
+          />
+
+          {/* Report fish button */}
+          <ReportFishButton
+            onReport={() => {
+              setFishReportMode(true);
+              setReportMode(false);
+              setSightingPopup(null);
+              setKelpPopup(null);
+              setFishReportPopup(null);
             }}
           />
         </div>
@@ -1027,6 +1327,115 @@ export default function OceanDataMap() {
             >
               ×
             </button>
+          </div>
+        )}
+
+        {/* Fish report mode hint */}
+        {fishReportMode && (
+          <div
+            className="odm-report-mode-hint"
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              pointerEvents: 'none',
+              zIndex: 20,
+              background: 'rgba(13,19,32,0.92)',
+              border: '1px solid #f97316',
+              borderRadius: 10,
+              padding: '10px 18px',
+              color: '#f97316',
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: '0 0 20px #f9731644',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="16" />
+              <line x1="8" y1="12" x2="16" y2="12" />
+            </svg>
+            Click on the map to pin your fish report
+            <button
+              onClick={() => setFishReportMode(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#8899aa',
+                cursor: 'pointer',
+                fontSize: 16,
+                lineHeight: 1,
+                padding: 0,
+                marginLeft: 4,
+                pointerEvents: 'auto',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Fish report modal */}
+        {showFishReportModal && fishReportCoords && (
+          <ReportFishModal
+            lat={fishReportCoords.lat}
+            lng={fishReportCoords.lng}
+            onClose={() => {
+              setShowFishReportModal(false);
+              setFishReportCoords(null);
+            }}
+            onSubmit={handleFishReportSubmit}
+          />
+        )}
+
+        {/* Fish activity feed section inside community feed (separate toggle) */}
+        {showFishFeed && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: 350,
+              height: '100%',
+              background: 'rgba(13,19,32,0.96)',
+              borderLeft: '1px solid #1e2a42',
+              zIndex: 8,
+              display: 'flex',
+              flexDirection: 'column',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              fontFamily: 'system-ui, sans-serif',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #1e2a42', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>🐟</span>
+                <span style={{ fontWeight: 700, fontSize: 15, color: '#e2e8f0' }}>Fish Activity</span>
+                {fishReports.length > 0 && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#f97316', background: '#f9731618', border: '1px solid #f9731633', borderRadius: 4, padding: '1px 6px' }}>
+                    {fishReports.filter((r) => r.status !== 'expired').length} active
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowFishFeed(false)}
+                style={{ background: 'none', border: 'none', color: '#8899aa', cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 4 }}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
+              <FishActivityFeed
+                reports={fishReports.filter((r) => r.status !== 'expired')}
+                onReportClick={handleFishFeedClick}
+              />
+            </div>
           </div>
         )}
 

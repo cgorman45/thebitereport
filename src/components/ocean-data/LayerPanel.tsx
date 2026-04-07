@@ -6,6 +6,7 @@ interface LayerPanelProps {
   onToggle: (layerId: string) => void;
   hasKelpData: boolean;
   hasDriftData: boolean;
+  fishReportCount?: number;
 }
 
 const PANEL_STYLE: React.CSSProperties = {
@@ -42,6 +43,13 @@ interface DriftLayer {
 const DRIFT_LAYERS: DriftLayer[] = [
   { id: 'drift-heatmap', color: '#a855f7', label: 'Drift Heatmap' },
   { id: 'current-vectors', color: '#ec4899', label: 'Current Vectors' },
+];
+
+const WEATHER_LAYERS: LiveLayer[] = [
+  { id: 'windy-wind', color: '#38bdf8', label: 'Wind' },
+  { id: 'windy-waves', color: '#06b6d4', label: 'Waves' },
+  { id: 'windy-currents', color: '#2dd4bf', label: 'Currents' },
+  { id: 'windy-swell', color: '#818cf8', label: 'Swell' },
 ];
 
 interface KelpLayer {
@@ -139,11 +147,66 @@ function Divider() {
   return <div style={{ height: 1, background: '#1e2a42', margin: '12px 0' }} />;
 }
 
-export default function LayerPanel({ layers, loading, onToggle, hasKelpData, hasDriftData }: LayerPanelProps) {
+const LIVE_REPORT_LAYERS: LiveLayer[] = [
+  { id: 'fish-reports', color: '#f97316', label: 'Fish Activity' },
+];
+
+export default function LayerPanel({ layers, loading, onToggle, hasKelpData, hasDriftData, fishReportCount }: LayerPanelProps) {
   return (
     <>
       <style>{`@keyframes ocean-spin { to { transform: rotate(360deg); } }`}</style>
       <div style={PANEL_STYLE}>
+        {/* Section 0: Live Reports */}
+        <SectionLabel>Live Reports</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {LIVE_REPORT_LAYERS.map(({ id, color, label }) => (
+            <button
+              key={id}
+              onClick={() => onToggle(id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: '#e2e8f0',
+                width: '100%',
+                textAlign: 'left',
+              }}
+            >
+              {loading[id] ? (
+                <Spinner color={color} />
+              ) : (
+                <Checkbox checked={!!layers[id]} color={color} />
+              )}
+              <span style={{ fontSize: 12, flex: 1 }}>{label}</span>
+              {fishReportCount != null && fishReportCount > 0 ? (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color,
+                    background: `${color}18`,
+                    border: `1px solid ${color}44`,
+                    borderRadius: 3,
+                    padding: '1px 5px',
+                    letterSpacing: '0.04em',
+                    marginLeft: 4,
+                  }}
+                >
+                  {fishReportCount}
+                </span>
+              ) : (
+                <Badge label="LIVE" color="#f97316" bg="#f9731615" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        <Divider />
+
         {/* Section 1: Ocean Data */}
         <SectionLabel>Ocean Data</SectionLabel>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -245,6 +308,35 @@ export default function LayerPanel({ layers, loading, onToggle, hasKelpData, has
               ) : (
                 <Badge label="No Data" color="#8899aa" bg="#8899aa15" />
               )}
+            </button>
+          ))}
+        </div>
+
+        <Divider />
+
+        {/* Section 4: Weather (Windy) */}
+        <SectionLabel>Weather</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {WEATHER_LAYERS.map(({ id, color, label }) => (
+            <button
+              key={id}
+              onClick={() => onToggle(id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: '#e2e8f0',
+                width: '100%',
+                textAlign: 'left',
+              }}
+            >
+              <Checkbox checked={!!layers[id]} color={color} />
+              <span style={{ fontSize: 12, flex: 1 }}>{label}</span>
+              <Badge label="WINDY" color="#38bdf8" bg="#38bdf815" />
             </button>
           ))}
         </div>
