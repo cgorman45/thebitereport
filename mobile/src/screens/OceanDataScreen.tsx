@@ -1,20 +1,22 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import ProximityAlerts from '../components/ProximityAlerts';
+import ReportFishModal from '../components/ReportFishModal';
+import FishReportCard from '../components/FishReportCard';
+import { apiFetch } from '../lib/api';
 
 type WindyOverlay = 'wind' | 'waves' | 'currents' | 'swell';
-
-interface LayerToggle {
-  id: string;
-  label: string;
-  color: string;
-  badge: string;
-  badgeColor: string;
-  enabled: boolean;
-}
 
 const WINDY_OVERLAYS: { key: WindyOverlay; label: string; color: string }[] = [
   { key: 'wind', label: 'Wind', color: '#38bdf8' },
@@ -27,9 +29,64 @@ function buildWindyUrl(overlay: WindyOverlay): string {
   return `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=imperial&metricTemp=imperial&metricWind=mph&zoom=8&overlay=${overlay}&product=ecmwf&level=surface&lat=33.5&lon=-119.0&marker=true&calendar=now&pressure=true&type=map&menu=&message=true&forecast=12&theme=dark`;
 }
 
+interface FishReport {
+  id: string;
+  species: string;
+  quantity: string;
+  bait?: string | null;
+  display_name?: string | null;
+  created_at: string;
+  verification_count?: number;
+}
+
 export default function OceanDataScreen() {
   const [activeOverlay, setActiveOverlay] = useState<WindyOverlay>('wind');
   const [showSST, setShowSST] = useState(false);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [fishReports, setFishReports] = useState<FishReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+
+  const fetchFishReports = useCallback(async () => {
+    setLoadingReports(true);
+    try {
+      const data = await apiFetch<{ reports?: FishReport[] } | FishReport[]>('/api/fish-reports');
+      const list = Array.isArray(data) ? data : (data as { reports?: FishReport[] }).reports ?? [];
+      setFishReports(list.slice(0, 10));
+    } catch (err) {
+      console.error('Failed to fetch fish reports:', err);
+    } finally {
+      setLoadingReports(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchFishReports();
+  }, [fetchFishReports]);
+
+  async function handleReportFishPress() {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Location required',
+        'Allow location access so we can tag your fish report accurately.',
+      );
+      return;
+    }
+    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    setCurrentLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+    setReportModalVisible(true);
+  }
+
+  function handleModalClose() {
+    setReportModalVisible(false);
+  }
+
+  function handleModalSubmit() {
+    setReportModalVisible(false);
+    Alert.alert('Report submitted!', 'Thanks for sharing the bite info.');
+    fetchFishReports();
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -45,6 +102,13 @@ export default function OceanDataScreen() {
       {/* Proximity alerts + GPS toggle */}
       <View style={styles.proximityContainer}>
         <ProximityAlerts />
+      </View>
+
+      {/* Report Fish button */}
+      <View style={styles.reportBtnContainer}>
+        <TouchableOpacity style={styles.reportBtn} onPress={handleReportFishPress}>
+          <Text style={styles.reportBtnText}>🐟 Report Fish Activity</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Overlay selector */}
@@ -129,6 +193,37 @@ export default function OceanDataScreen() {
           <Text style={styles.infoDetail}>Deploy service to activate</Text>
         </View>
       </View>
+
+      {/* Recent fish reports */}
+      {(fishReports.length > 0 || loadingReports) && (
+        <View style={styles.reportsSection}>
+          <Text style={styles.reportsSectionLabel}>RECENT FISH REPORTS</Text>
+          {loadingReports && fishReports.length === 0 ? (
+            <Text style={styles.reportsLoading}>Loading...</Text>
+          ) : (
+            fishReports.map((report) => (
+              <FishReportCard
+                key={report.id}
+                species={report.species}
+                quantity={report.quantity}
+                bait={report.bait}
+                display_name={report.display_name}
+                created_at={report.created_at}
+                verification_count={report.verification_count}
+              />
+            ))
+          )}
+        </View>
+      )}
+
+      {/* Report Fish Modal */}
+      <ReportFishModal
+        visible={reportModalVisible}
+        lat={currentLocation?.lat ?? 33.5}
+        lng={currentLocation?.lng ?? -119.0}
+        onClose={handleModalClose}
+        onSubmit={handleModalSubmit}
+      />
     </SafeAreaView>
   );
 }
@@ -147,6 +242,16 @@ const styles = StyleSheet.create({
   greenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green },
   liveText: { fontSize: 11, color: colors.green, fontWeight: '600' },
   proximityContainer: { paddingHorizontal: 12, paddingBottom: 4 },
+  reportBtnContainer: { paddingHorizontal: 12, paddingBottom: 8 },
+  reportBtn: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.accent + '60',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  reportBtnText: { fontSize: 13, color: colors.accent, fontWeight: '700' },
   filterRow: { maxHeight: 40, marginBottom: 4 },
   filterChip: {
     paddingHorizontal: 14,
@@ -208,4 +313,13 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 9, color: colors.muted, fontWeight: '700', letterSpacing: 1 },
   infoStatus: { fontSize: 13, color: colors.muted, fontWeight: '600', marginTop: 4 },
   infoDetail: { fontSize: 10, color: colors.muted, marginTop: 2 },
+  reportsSection: { paddingHorizontal: 12, paddingBottom: 12 },
+  reportsSectionLabel: {
+    fontSize: 10,
+    color: colors.muted,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  reportsLoading: { fontSize: 12, color: colors.muted, textAlign: 'center', paddingVertical: 8 },
 });
