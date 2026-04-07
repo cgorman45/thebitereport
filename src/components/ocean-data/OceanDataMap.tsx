@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Map, { Popup } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import type { MapEvent, MapMouseEvent } from 'mapbox-gl';
@@ -13,6 +13,10 @@ import ReportKelpButton from './ReportKelpButton';
 import ReportKelpModal from './ReportKelpModal';
 import SightingPopup from './SightingPopup';
 import CommunityFeed from './CommunityFeed';
+import { useGPSTracking } from './useGPSTracking';
+import ProximityAlertBanner from './ProximityAlertBanner';
+import GPSToggle from './GPSToggle';
+import type { Detection } from '@/lib/ocean-data/proximity';
 import { getSupabase } from '@/lib/supabase/client';
 import { useOptionalAuth } from '@/components/auth/AuthProvider';
 
@@ -73,6 +77,10 @@ export default function OceanDataMap() {
     'kelp-heatmap': false,
     'drift-heatmap': false,
     'current-vectors': false,
+    'windy-wind': false,
+    'windy-waves': false,
+    'windy-currents': false,
+    'windy-swell': false,
   });
 
   const [loading, setLoading] = useState<Record<string, boolean>>({
@@ -85,6 +93,10 @@ export default function OceanDataMap() {
     'kelp-heatmap': false,
     'drift-heatmap': false,
     'current-vectors': false,
+    'windy-wind': false,
+    'windy-waves': false,
+    'windy-currents': false,
+    'windy-swell': false,
   });
 
   const [dataTimestamp, setDataTimestamp] = useState<string | null>(null);
@@ -104,6 +116,28 @@ export default function OceanDataMap() {
 
   const mapLoadedRef = useRef(false);
   const sightingsRef = useRef<KelpSighting[]>([]);
+
+  // Build detections list for proximity alerts from all data sources
+  const proximityDetections: Detection[] = useMemo(() => {
+    const dets: Detection[] = [];
+    // Add community sightings
+    for (const s of sightings) {
+      if (s.status !== 'expired') {
+        dets.push({
+          id: `sighting-${s.id}`,
+          lat: s.lat,
+          lng: s.lng,
+          type: 'kelp-sighting',
+          label: s.description || `Kelp sighting by ${s.display_name}`,
+          confidence: s.verification_count >= 3 ? 0.9 : 0.5 + s.verification_count * 0.1,
+        });
+      }
+    }
+    return dets;
+  }, [sightings]);
+
+  const { gps, alerts, alertRadius, setAlertRadius, startTracking, stopTracking, dismissAlert } =
+    useGPSTracking(proximityDetections);
 
   // Keep ref in sync for use in map event handlers
   useEffect(() => {
@@ -151,6 +185,70 @@ export default function OceanDataMap() {
       (map.getSource('kelp-sightings-source') as mapboxgl.GeoJSONSource).setData(geojson);
     }
   }, [sightings]);
+
+  // Update user position on the map when GPS changes
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map || !mapLoadedRef.current) return;
+    if (!gps.enabled || gps.lat === null || gps.lng === null) {
+      // Hide user position layers when GPS is off
+      if (map.getLayer('user-position-dot')) {
+        map.setLayoutProperty('user-position-dot', 'visibility', 'none');
+      }
+      if (map.getLayer('user-position-ring')) {
+        map.setLayoutProperty('user-position-ring', 'visibility', 'none');
+      }
+      return;
+    }
+
+    const point: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [gps.lng, gps.lat] },
+          properties: {},
+        },
+      ],
+    };
+
+    if (map.getSource('user-position')) {
+      (map.getSource('user-position') as mapboxgl.GeoJSONSource).setData(point);
+      if (map.getLayer('user-position-dot')) {
+        map.setLayoutProperty('user-position-dot', 'visibility', 'visible');
+      }
+      if (map.getLayer('user-position-ring')) {
+        map.setLayoutProperty('user-position-ring', 'visibility', 'visible');
+      }
+    } else {
+      map.addSource('user-position', { type: 'geojson', data: point });
+      map.addLayer({
+        id: 'user-position-ring',
+        type: 'circle',
+        source: 'user-position',
+        paint: {
+          'circle-radius': 14,
+          'circle-color': '#3b82f6',
+          'circle-opacity': 0.2,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#3b82f6',
+          'circle-stroke-opacity': 0.5,
+        },
+      });
+      map.addLayer({
+        id: 'user-position-dot',
+        type: 'circle',
+        source: 'user-position',
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#3b82f6',
+          'circle-opacity': 1,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+    }
+  }, [gps.enabled, gps.lat, gps.lng]);
 
   // Check for kelp data on mount
   useEffect(() => {
@@ -308,6 +406,20 @@ export default function OceanDataMap() {
 
   const handleToggle = useCallback(
     async (layerId: string) => {
+      // Windy layers don't need the Mapbox map — handle separately
+      if (layerId.startsWith('windy-')) {
+        setLayers((prev) => {
+          const next = { ...prev };
+          // Mutually exclusive — turn off other windy layers
+          for (const k of Object.keys(next)) {
+            if (k.startsWith('windy-')) next[k] = false;
+          }
+          next[layerId] = !prev[layerId];
+          return next;
+        });
+        return;
+      }
+
       const map = mapRef.current?.getMap();
       if (!map || !mapLoadedRef.current) return;
 
@@ -637,6 +749,21 @@ export default function OceanDataMap() {
     setShowFeed(false);
   }, []);
 
+  // Windy overlay state
+  const activeWindyOverlay = (['windy-wind', 'windy-waves', 'windy-currents', 'windy-swell'] as const)
+    .find((id) => layers[id]) ?? null;
+
+  const windyOverlayMap: Record<string, string> = {
+    'windy-wind': 'wind',
+    'windy-waves': 'waves',
+    'windy-currents': 'currents',
+    'windy-swell': 'swell',
+  };
+
+  const windyUrl = activeWindyOverlay
+    ? `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=imperial&metricTemp=imperial&metricWind=mph&zoom=8&overlay=${windyOverlayMap[activeWindyOverlay]}&product=ecmwf&level=surface&lat=33.5&lon=-119.0&marker=true&calendar=now&pressure=true&type=map&menu=&message=true&forecast=12&theme=dark`
+    : null;
+
   const activeColorScale: 'sst' | 'chlorophyll' | 'kelp-heatmap' | 'drift-heatmap' | null =
     layers.sst || layers['goes-sst']
       ? 'sst'
@@ -659,6 +786,10 @@ export default function OceanDataMap() {
         @keyframes odm-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.6; }
+        }
+        @keyframes proximityPulse {
+          0%, 100% { box-shadow: 0 0 20px rgba(34,197,94,0.3); }
+          50% { box-shadow: 0 0 30px rgba(34,197,94,0.5); }
         }
       `}</style>
       <div
@@ -733,6 +864,32 @@ export default function OceanDataMap() {
           )}
         </Map>
 
+        {/* Windy weather overlay iframe */}
+        {windyUrl && (
+          <iframe
+            src={windyUrl}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              opacity: 0.75,
+              pointerEvents: 'auto',
+              zIndex: 5,
+            }}
+            title="Windy weather overlay"
+          />
+        )}
+
+        {/* Proximity alert banner */}
+        <ProximityAlertBanner
+          alerts={alerts}
+          onDismiss={dismissAlert}
+          onTap={(lat, lng) => mapRef.current?.getMap()?.flyTo({ center: [lng, lat], zoom: 14, duration: 800 })}
+        />
+
         {/* Top-left: data info */}
         <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 10 }}>
           <DataInfo timestamp={dataTimestamp} error={error} />
@@ -803,6 +960,15 @@ export default function OceanDataMap() {
             </svg>
             Community
           </button>
+
+          {/* GPS proximity toggle */}
+          <GPSToggle
+            enabled={gps.enabled}
+            alertRadius={alertRadius}
+            speed={gps.speed}
+            onToggle={() => gps.enabled ? stopTracking() : startTracking()}
+            onRadiusChange={setAlertRadius}
+          />
 
           {/* Report kelp button */}
           <ReportKelpButton

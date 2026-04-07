@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { colors } from '../theme/colors';
+import ProximityAlerts from '../components/ProximityAlerts';
 
 type WindyOverlay = 'wind' | 'waves' | 'currents' | 'swell';
 
@@ -39,6 +40,11 @@ export default function OceanDataScreen() {
           <View style={styles.greenDot} />
           <Text style={styles.liveText}>Live</Text>
         </View>
+      </View>
+
+      {/* Proximity alerts + GPS toggle */}
+      <View style={styles.proximityContainer}>
+        <ProximityAlerts />
       </View>
 
       {/* Overlay selector */}
@@ -140,6 +146,7 @@ const styles = StyleSheet.create({
   liveBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   greenDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.green },
   liveText: { fontSize: 11, color: colors.green, fontWeight: '600' },
+  proximityContainer: { paddingHorizontal: 12, paddingBottom: 4 },
   filterRow: { maxHeight: 40, marginBottom: 4 },
   filterChip: {
     paddingHorizontal: 14,
