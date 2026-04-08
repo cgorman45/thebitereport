@@ -37,40 +37,47 @@ export async function GET(req: NextRequest) {
     const days = Math.min(parseInt(searchParams.get('days') || '3'), 30);
     const cacheKey = `${CACHE_KEY}:${days}`;
 
-    const cached = cache.get<object>(cacheKey);
-    if (cached) return NextResponse.json(cached);
+    // Don't serve cached errors
+    const cached = cache.get<{ meta?: { error?: string } }>(cacheKey);
+    if (cached && !cached.meta?.error) return NextResponse.json(cached);
 
     const endDate = new Date().toISOString().split('T')[0];
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
       .toISOString()
       .split('T')[0];
 
-    // Request SAR vessel detections for our coverage area
-    const body = {
-      datasets: ['public-global-sar-presence:latest'],
+    // Use the events API to get vessel detections in our area
+    // The events endpoint supports geographic filtering natively
+    const params = new URLSearchParams({
+      'datasets[0]': 'public-global-sar-presence:latest',
       'date-range': `${startDate},${endDate}`,
-      'spatial-resolution': 'low',
-      'temporal-resolution': 'daily',
-      geojson: {
-        type: 'Polygon',
-        coordinates: [[
-          [COVERAGE.lngMin, COVERAGE.latMin],
-          [COVERAGE.lngMax, COVERAGE.latMin],
-          [COVERAGE.lngMax, COVERAGE.latMax],
-          [COVERAGE.lngMin, COVERAGE.latMax],
-          [COVERAGE.lngMin, COVERAGE.latMin],
-        ]],
-      },
+      'spatial-resolution': 'LOW',
+      'temporal-resolution': 'MONTHLY',
+      'group-by': 'VESSEL_ID',
       format: 'JSON',
+    });
+
+    const regionBody = {
+      geojson: {
+          type: 'Polygon',
+          coordinates: [[
+            [COVERAGE.lngMin, COVERAGE.latMin],
+            [COVERAGE.lngMax, COVERAGE.latMin],
+            [COVERAGE.lngMax, COVERAGE.latMax],
+            [COVERAGE.lngMin, COVERAGE.latMax],
+            [COVERAGE.lngMin, COVERAGE.latMin],
+          ]],
+        },
+      },
     };
 
-    const res = await fetch(`${GFW_BASE}/4wings/report`, {
+    const res = await fetch(`${GFW_BASE}/4wings/report?${params}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(regionBody),
     });
 
     if (!res.ok) {
@@ -85,20 +92,28 @@ export async function GET(req: NextRequest) {
 
     const data = await res.json();
 
-    // Transform GFW response to GeoJSON
+    // Transform GFW report response to GeoJSON
     const features: object[] = [];
+    const entries = data.entries || [];
 
-    // GFW 4wings returns gridded data — convert cells to points
-    if (Array.isArray(data)) {
-      for (const entry of data) {
-        if (entry.lat != null && entry.lon != null) {
+    for (const entry of entries) {
+      // Each entry has a dataset key with an array of vessel records
+      const records = Object.values(entry).flat().filter(Boolean) as Record<string, unknown>[];
+      for (const rec of records) {
+        // Extract lat/lng from the record if available
+        const lat = rec.lat ?? rec.latitude;
+        const lng = rec.lon ?? rec.longitude;
+        if (lat != null && lng != null) {
           features.push({
             type: 'Feature',
-            geometry: { type: 'Point', coordinates: [entry.lon, entry.lat] },
+            geometry: { type: 'Point', coordinates: [Number(lng), Number(lat)] },
             properties: {
-              count: entry.value || entry.count || 1,
-              matched: entry.matched ?? null,
-              date: entry.date || startDate,
+              vessel_id: rec.vesselId || rec.vessel_id,
+              vessel_name: rec.shipname || rec.vesselName,
+              flag: rec.flag,
+              gear_type: rec.geartype,
+              detections: rec.detections || 1,
+              date: rec.date,
               source: 'sentinel-1-sar',
             },
           });
@@ -117,7 +132,10 @@ export async function GET(req: NextRequest) {
       },
     };
 
-    cache.set(cacheKey, result, CACHE_TTL);
+    // Only cache successful results
+    if (features.length > 0) {
+      cache.set(cacheKey, result, CACHE_TTL);
+    }
     return NextResponse.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
