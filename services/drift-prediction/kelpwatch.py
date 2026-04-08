@@ -51,8 +51,12 @@ def _extract_edge_points(geojson: dict) -> list[dict]:
 
 
 def _default_seed_points() -> list[dict]:
-    """Known SoCal kelp forest locations for seeding drift simulation."""
-    # Major kelp beds from Point Conception to the Mexican border
+    """Known SoCal + Baja kelp forest locations for seeding drift simulation.
+
+    The California Current flows southward — detachment events in SoCal frequently
+    produce paddies that drift into Baja waters. Baja sources also produce paddies
+    that drift offshore and along the coast.
+    """
     beds = [
         # Santa Barbara / Ventura
         (34.40, -119.85), (34.38, -119.70), (34.35, -119.55),
@@ -68,8 +72,33 @@ def _default_seed_points() -> list[dict]:
         # San Diego
         (33.20, -117.42), (33.10, -117.32), (32.95, -117.28),
         (32.85, -117.27), (32.75, -117.25), (32.65, -117.24),
-        # Coronado Islands (Mexico side, drift toward SoCal)
+        # Coronado Islands
         (32.45, -117.25), (32.40, -117.28),
+        # --- BAJA CALIFORNIA KEY KELP SOURCES ---
+        # Ensenada / Punta Banda (major kelp forest)
+        (31.85, -116.68), (31.80, -116.70), (31.75, -116.72),
+        (31.72, -116.73), (31.70, -116.75),
+        # Punta Banda kelp forest
+        (31.68, -116.73), (31.66, -116.72), (31.64, -116.70),
+        # San Quintin
+        (30.55, -116.10), (30.48, -116.05), (30.40, -116.00),
+        # Isla Cedros (major offshore kelp forest)
+        (28.20, -115.25), (28.15, -115.22), (28.10, -115.18),
+        (28.05, -115.20), (28.00, -115.25), (27.95, -115.30),
+        # Isla Natividad (adjacent to Cedros)
+        (27.88, -115.20), (27.85, -115.18), (27.82, -115.15),
+        # Punta Eugenia
+        (27.85, -115.08), (27.80, -115.05),
+        # Bahia Tortugas
+        (27.70, -114.92), (27.68, -114.88),
+        # Bahia Asuncion
+        (27.12, -114.35), (27.08, -114.30),
+        # Punta Abreojos
+        (26.72, -113.65), (26.68, -113.60),
+        # Bahia Magdalena (southern Baja)
+        (24.60, -112.15), (24.55, -112.10), (24.50, -112.05),
+        # Cabo San Lucas area
+        (22.95, -110.05), (22.90, -109.95),
     ]
 
     # Add slight offshore variation to each seed point

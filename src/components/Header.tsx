@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useOptionalAuth } from './auth/AuthProvider';
 import AuthModal from './auth/AuthModal';
 import UserMenu from './auth/UserMenu';
+import { getSupabase } from '@/lib/supabase/client';
 
 const NAV_LINKS = [
   { href: '/', label: 'Bite Report' },
@@ -22,6 +23,17 @@ const NAV_LINKS = [
 export default function Header() {
   const pathname = usePathname();
   const auth = useOptionalAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!auth?.user) { setIsAdmin(false); return; }
+    getSupabase()
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', auth.user.id)
+      .single()
+      .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
+  }, [auth?.user]);
 
   return (
     <React.Fragment>
@@ -77,6 +89,19 @@ export default function Header() {
               }}
             >
               My Boats
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              href="/admin/kelp-review"
+              className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200"
+              style={{
+                backgroundColor: pathname.startsWith('/admin') ? '#ff6b3518' : 'transparent',
+                color: '#ff6b35',
+                border: pathname.startsWith('/admin') ? '1px solid #ff6b3533' : '1px solid transparent',
+              }}
+            >
+              Admin
             </Link>
           )}
         </nav>

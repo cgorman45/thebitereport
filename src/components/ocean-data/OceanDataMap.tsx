@@ -51,11 +51,12 @@ type LayerId = RasterLayerId | 'breaks';
 
 const RASTER_LAYERS: RasterLayerId[] = ['sst', 'chlorophyll', 'goes-sst'];
 
+// Full SoCal + Baja California coverage (down to Cabo San Lucas)
 const OVERLAY_COORDS: [[number, number], [number, number], [number, number], [number, number]] = [
   [-121.0, 35.0],
-  [-117.0, 35.0],
-  [-117.0, 32.0],
-  [-121.0, 32.0],
+  [-109.0, 35.0],
+  [-109.0, 22.0],
+  [-121.0, 22.0],
 ];
 
 interface KelpPopupState {
@@ -69,6 +70,7 @@ interface KelpPopupState {
     ndvi: number | null;
     fai: number | null;
     fdi: number | null;
+    thumbnail_b64: string | null;
   };
 }
 
@@ -105,6 +107,7 @@ export default function OceanDataMap() {
     'kelp-markers': false,
     'kelp-polygons': false,
     'kelp-heatmap': false,
+    'boat-kelp-signals': false,
     'drift-heatmap': false,
     'current-vectors': false,
     'windy-wind': false,
@@ -122,6 +125,7 @@ export default function OceanDataMap() {
     'kelp-markers': false,
     'kelp-polygons': false,
     'kelp-heatmap': false,
+    'boat-kelp-signals': false,
     'drift-heatmap': false,
     'current-vectors': false,
     'windy-wind': false,
@@ -542,6 +546,7 @@ export default function OceanDataMap() {
           ndvi: props.ndvi != null ? Number(props.ndvi) : null,
           fai: props.fai != null ? Number(props.fai) : null,
           fdi: props.fdi != null ? Number(props.fdi) : null,
+          thumbnail_b64: props.thumbnail_b64 ? String(props.thumbnail_b64) : null,
         },
       });
     });
@@ -715,6 +720,58 @@ export default function OceanDataMap() {
               map.setPaintProperty('kelp-heatmap', 'raster-opacity', 0);
             }
           }
+        } else if (layerId === 'boat-kelp-signals') {
+          if (turningOn) {
+            const res = await fetch('/api/ocean-data/boat-kelp-signals');
+            if (!res.ok) { setLayers((prev) => ({ ...prev, [layerId]: false })); return; }
+            const geojson = await res.json();
+            if (!geojson.features || geojson.features.length === 0) {
+              setLayers((prev) => ({ ...prev, [layerId]: false }));
+              return;
+            }
+            if (map.getSource('boat-kelp-source')) {
+              (map.getSource('boat-kelp-source') as mapboxgl.GeoJSONSource).setData(geojson);
+              if (map.getLayer('boat-kelp-circles')) {
+                map.setPaintProperty('boat-kelp-circles', 'circle-opacity', 0.9);
+              }
+            } else {
+              map.addSource('boat-kelp-source', { type: 'geojson', data: geojson });
+              // Pulsing orange circles for boat clusters
+              map.addLayer({
+                id: 'boat-kelp-circles',
+                type: 'circle',
+                source: 'boat-kelp-source',
+                paint: {
+                  'circle-radius': ['interpolate', ['linear'], ['get', 'boat_count'], 2, 12, 5, 22, 10, 30],
+                  'circle-color': '#ff6b35',
+                  'circle-opacity': 0.9,
+                  'circle-stroke-width': 3,
+                  'circle-stroke-color': '#ff6b35',
+                  'circle-stroke-opacity': 0.4,
+                },
+              });
+              // Label with boat count
+              map.addLayer({
+                id: 'boat-kelp-labels',
+                type: 'symbol',
+                source: 'boat-kelp-source',
+                layout: {
+                  'text-field': ['concat', ['get', 'boat_count'], ' boats'],
+                  'text-size': 11,
+                  'text-offset': [0, 1.8],
+                  'text-anchor': 'top',
+                },
+                paint: {
+                  'text-color': '#ff6b35',
+                  'text-halo-color': '#0a0f1a',
+                  'text-halo-width': 1.5,
+                },
+              });
+            }
+          } else {
+            if (map.getLayer('boat-kelp-circles')) map.setPaintProperty('boat-kelp-circles', 'circle-opacity', 0);
+            if (map.getLayer('boat-kelp-labels')) map.setLayoutProperty('boat-kelp-labels', 'visibility', 'none');
+          }
         } else if (layerId === 'drift-heatmap') {
           if (turningOn) {
             // Check if data is available (204 = no data)
@@ -730,7 +787,7 @@ export default function OceanDataMap() {
               map.addSource('drift-heatmap-source', {
                 type: 'image',
                 url: '/api/ocean-data/drift-heatmap',
-                coordinates: [[-121, 35], [-117, 35], [-117, 32], [-121, 32]],
+                coordinates: OVERLAY_COORDS,
               });
               map.addLayer({
                 id: 'drift-heatmap',
@@ -985,7 +1042,7 @@ export default function OceanDataMap() {
   };
 
   const windyUrl = activeWindyOverlay
-    ? `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=imperial&metricTemp=imperial&metricWind=mph&zoom=8&overlay=${windyOverlayMap[activeWindyOverlay]}&product=ecmwf&level=surface&lat=33.5&lon=-119.0&marker=true&calendar=now&pressure=true&type=map&menu=&message=true&forecast=12&theme=dark`
+    ? `https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=imperial&metricTemp=imperial&metricWind=mph&zoom=6&overlay=${windyOverlayMap[activeWindyOverlay]}&product=ecmwf&level=surface&lat=29.0&lon=-116.0&marker=true&calendar=now&pressure=true&type=map&menu=&message=true&forecast=12&theme=dark`
     : null;
 
   const activeColorScale: 'sst' | 'chlorophyll' | 'kelp-heatmap' | 'drift-heatmap' | null =
@@ -1023,7 +1080,7 @@ export default function OceanDataMap() {
         <Map
           ref={mapRef}
           mapboxAccessToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN}
-          initialViewState={{ latitude: 33.5, longitude: -119.0, zoom: 8 }}
+          initialViewState={{ latitude: 28.0, longitude: -114.0, zoom: 4.5 }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           style={{ width: '100%', height: 'calc(100vh - 64px)' }}
           onLoad={onMapLoad}
@@ -1055,6 +1112,7 @@ export default function OceanDataMap() {
                       }
                     : null
                 }
+                thumbnail_b64={kelpPopup.properties.thumbnail_b64}
                 lat={kelpPopup.lat}
                 lng={kelpPopup.lng}
               />

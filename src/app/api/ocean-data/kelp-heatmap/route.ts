@@ -10,11 +10,11 @@ export const dynamic = 'force-dynamic';
 const CACHE_KEY = 'ocean:kelp-heatmap';
 const CACHE_TTL = 3600_000; // 1 hour
 
-// SoCal bounding box
-const LAT_MIN = 32;
+// Full SoCal + Baja California coverage (down to Cabo San Lucas)
+const LAT_MIN = 22;
 const LAT_MAX = 35;
 const LNG_MIN = -121;
-const LNG_MAX = -117;
+const LNG_MAX = -109;
 const CELL_SIZE = 0.05; // degrees
 
 const PNG_HEADERS = {

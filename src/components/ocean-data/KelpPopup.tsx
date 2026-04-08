@@ -6,6 +6,7 @@ interface KelpPopupProps {
   method: string;
   detected_at: string;
   indices: { ndvi: number; fai: number; fdi: number } | null;
+  thumbnail_b64: string | null;
   lat: number;
   lng: number;
 }
@@ -71,11 +72,29 @@ export default function KelpPopup({
   method,
   detected_at,
   indices,
+  thumbnail_b64,
   lat,
   lng,
 }: KelpPopupProps) {
   return (
     <div style={POPUP_STYLE}>
+      {thumbnail_b64 && (
+        <div style={{ marginBottom: 8, borderRadius: 6, overflow: 'hidden' }}>
+          <img
+            src={`data:image/jpeg;base64,${thumbnail_b64}`}
+            alt="Satellite imagery of kelp detection"
+            style={{
+              width: '100%',
+              height: 128,
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+          <div style={{ fontSize: 9, color: '#667788', textAlign: 'center', marginTop: 2 }}>
+            Sentinel-2 satellite imagery
+          </div>
+        </div>
+      )}
       <div
         style={{
           fontSize: 13,

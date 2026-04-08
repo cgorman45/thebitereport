@@ -7,11 +7,12 @@ log = logging.getLogger('drift-prediction')
 
 HYCOM_URL = 'https://tds.hycom.org/thredds/dodsC/GLBy0.08/expt_93.0'
 
+# Full SoCal + Baja California coverage (down to Cabo San Lucas)
 BBOX = {
-    'lat_min': 32.0,
+    'lat_min': 22.0,
     'lat_max': 35.0,
     'lng_min': -121.0,
-    'lng_max': -117.0,
+    'lng_max': -109.0,
 }
 
 

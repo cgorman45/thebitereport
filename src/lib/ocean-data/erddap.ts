@@ -16,11 +16,12 @@ export interface GridData {
 
 const ERDDAP_BASE = 'https://coastwatch.pfeg.noaa.gov/erddap/griddap';
 
+// Full SoCal + Baja California coverage (down to Cabo San Lucas)
 const DEFAULT_BOUNDS: GridBounds = {
-  latMin: 32.0,
+  latMin: 22.0,
   latMax: 35.0,
   lngMin: -121.0,
-  lngMax: -117.0,
+  lngMax: -109.0,
 };
 
 async function fetchWithRetry(url: string): Promise<Response> {

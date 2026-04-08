@@ -8,9 +8,10 @@ from db import write_drift_prediction, write_current_vectors
 
 log = logging.getLogger('drift-prediction')
 
+# Full SoCal + Baja California coverage (down to Cabo San Lucas)
 BBOX = {
-    'lat_min': 32.0, 'lat_max': 35.0,
-    'lng_min': -121.0, 'lng_max': -117.0,
+    'lat_min': 22.0, 'lat_max': 35.0,
+    'lng_min': -121.0, 'lng_max': -109.0,
 }
 
 

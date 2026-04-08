@@ -28,7 +28,10 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from('kelp_detections')
-      .select('lat, lng, confidence, area_m2, method, detected_at, indices');
+      .select('lat, lng, confidence, area_m2, method, detected_at, indices, thumbnail_b64');
+
+    // Only show approved detections on public map (pending shown too until review backlog clears)
+    query = query.in('status', ['pending', 'approved']);
 
     if (!isNaN(minConfidence) && minConfidence > 0) {
       query = query.gte('confidence', minConfidence);
@@ -59,6 +62,7 @@ export async function GET(request: Request) {
           method: row.method,
           detected_at: row.detected_at,
           indices: row.indices,
+          thumbnail_b64: row.thumbnail_b64 || null,
         },
       })),
     };
