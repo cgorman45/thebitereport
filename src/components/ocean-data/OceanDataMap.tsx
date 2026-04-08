@@ -109,6 +109,7 @@ export default function OceanDataMap() {
     'kelp-heatmap': false,
     'boat-kelp-signals': false,
     'sar-vessels': false,
+    'all-vessels': false,
     'drift-heatmap': false,
     'current-vectors': false,
     'windy-wind': false,
@@ -128,6 +129,7 @@ export default function OceanDataMap() {
     'kelp-heatmap': false,
     'boat-kelp-signals': false,
     'sar-vessels': false,
+    'all-vessels': false,
     'drift-heatmap': false,
     'current-vectors': false,
     'windy-wind': false,
@@ -806,6 +808,72 @@ export default function OceanDataMap() {
             }
           } else {
             if (map.getLayer('sar-vessels-circles')) map.setPaintProperty('sar-vessels-circles', 'circle-opacity', 0);
+          }
+        } else if (layerId === 'all-vessels') {
+          if (turningOn) {
+            const res = await fetch('/api/ocean-data/all-vessels');
+            if (!res.ok) { setLayers((prev) => ({ ...prev, [layerId]: false })); return; }
+            const geojson = await res.json();
+            if (!geojson.features || geojson.features.length === 0) {
+              setLayers((prev) => ({ ...prev, [layerId]: false }));
+              return;
+            }
+            if (map.getSource('all-vessels-source')) {
+              (map.getSource('all-vessels-source') as mapboxgl.GeoJSONSource).setData(geojson);
+              if (map.getLayer('all-vessels-stopped')) map.setPaintProperty('all-vessels-stopped', 'circle-opacity', 0.9);
+              if (map.getLayer('all-vessels-moving')) map.setPaintProperty('all-vessels-moving', 'circle-opacity', 0.6);
+            } else {
+              map.addSource('all-vessels-source', { type: 'geojson', data: geojson });
+              // Stopped vessels — bright, larger (potential kelp signal)
+              map.addLayer({
+                id: 'all-vessels-stopped',
+                type: 'circle',
+                source: 'all-vessels-source',
+                filter: ['==', ['get', 'status'], 'stopped'],
+                paint: {
+                  'circle-radius': 7,
+                  'circle-color': '#ef4444',
+                  'circle-opacity': 0.9,
+                  'circle-stroke-width': 2,
+                  'circle-stroke-color': '#fff',
+                  'circle-stroke-opacity': 0.8,
+                },
+              });
+              // Slow/fishing vessels — medium
+              map.addLayer({
+                id: 'all-vessels-slow',
+                type: 'circle',
+                source: 'all-vessels-source',
+                filter: ['==', ['get', 'status'], 'slow'],
+                paint: {
+                  'circle-radius': 5,
+                  'circle-color': '#eab308',
+                  'circle-opacity': 0.7,
+                  'circle-stroke-width': 1,
+                  'circle-stroke-color': '#fff',
+                  'circle-stroke-opacity': 0.5,
+                },
+              });
+              // Transit vessels — small, dim
+              map.addLayer({
+                id: 'all-vessels-moving',
+                type: 'circle',
+                source: 'all-vessels-source',
+                filter: ['==', ['get', 'status'], 'transit'],
+                paint: {
+                  'circle-radius': 3,
+                  'circle-color': '#38bdf8',
+                  'circle-opacity': 0.4,
+                  'circle-stroke-width': 1,
+                  'circle-stroke-color': '#38bdf8',
+                  'circle-stroke-opacity': 0.2,
+                },
+              });
+            }
+          } else {
+            if (map.getLayer('all-vessels-stopped')) map.setPaintProperty('all-vessels-stopped', 'circle-opacity', 0);
+            if (map.getLayer('all-vessels-slow')) map.setPaintProperty('all-vessels-slow', 'circle-opacity', 0);
+            if (map.getLayer('all-vessels-moving')) map.setPaintProperty('all-vessels-moving', 'circle-opacity', 0);
           }
         } else if (layerId === 'drift-heatmap') {
           if (turningOn) {
