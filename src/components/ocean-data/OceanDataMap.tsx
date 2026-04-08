@@ -776,7 +776,7 @@ export default function OceanDataMap() {
           }
         } else if (layerId === 'sar-vessels') {
           if (turningOn) {
-            const res = await fetch('/api/ocean-data/sar-vessels?days=3');
+            const res = await fetch('/api/ocean-data/sar-vessels?days=30');
             if (!res.ok) { setLayers((prev) => ({ ...prev, [layerId]: false })); return; }
             const geojson = await res.json();
             if (!geojson.features || geojson.features.length === 0) {
@@ -795,10 +795,10 @@ export default function OceanDataMap() {
                 type: 'circle',
                 source: 'sar-vessels-source',
                 paint: {
-                  'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 5, 10, 12, 50, 20],
+                  'circle-radius': 6,
                   'circle-color': '#e879f9',
-                  'circle-opacity': 0.7,
-                  'circle-stroke-width': 1,
+                  'circle-opacity': 0.8,
+                  'circle-stroke-width': 2,
                   'circle-stroke-color': '#e879f9',
                   'circle-stroke-opacity': 0.3,
                 },
