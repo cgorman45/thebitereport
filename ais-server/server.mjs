@@ -71,6 +71,18 @@ function connect() {
       const mmsi = r.UserID || msg.MetaData?.MMSI;
       if (!mmsi) return;
 
+      // Filter out known cargo/tanker/cruise ship names
+      const shipName = (msg.MetaData?.ShipName || '').trim();
+      const cargoPatterns = [
+        /^MSC\s/i, /^CMA\s*CGM/i, /^COSCO/i, /^OOCL/i, /^CSCL/i, /^ONE\s/i,
+        /^HMM\s/i, /^EVERGREEN/i, /^MAERSK/i, /^HAPAG/i, /^ZIM\s/i,
+        /^MATSON/i, /^APL\s/i, /^YANG\s*MING/i, /^MOL\s/i, /^NYK\s/i,
+        /TANKER/i, /CRUDE/i, /CHEMICAL/i, /LNG\s/i, /LPG\s/i,
+        /LEADER$/i, /^ZAANDAM/i, /^CARNIVAL/i, /^PRINCESS/i,
+        /^PILOT\s/i, /^TUG\s/i, /^DREDG/i, /^BARGE\s/i,
+      ];
+      if (cargoPatterns.some(p => p.test(shipName))) return;
+
       messageCount++;
       lastMessageTime = Date.now();
 

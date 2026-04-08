@@ -38,30 +38,54 @@ export async function GET() {
     const data = await res.json();
     const positions = data.positions || [];
 
-    // Convert to GeoJSON
-    const features = positions.map((p: {
-      mmsi: number;
-      name: string;
-      lat: number;
-      lng: number;
-      sog: number;
-      cog: number;
-      heading: number;
-      timestamp: number;
-    }) => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-      properties: {
-        mmsi: p.mmsi,
-        name: p.name,
-        speed: p.sog,
-        heading: p.heading,
-        course: p.cog,
-        age_sec: Math.round((Date.now() - p.timestamp) / 1000),
-        // Classify vessel activity
-        status: p.sog < 1.5 ? 'stopped' : p.sog < 5 ? 'slow' : 'transit',
-      },
-    }));
+    // Known cargo/tanker/cruise ship name patterns to exclude
+    const CARGO_PATTERNS = [
+      /^MSC\s/i, /^CMA\s*CGM/i, /^COSCO/i, /^OOCL/i, /^CSCL/i, /^ONE\s/i,
+      /^HMM\s/i, /^EVERGREEN/i, /^MAERSK/i, /^HAPAG/i, /^ZIM\s/i, /^PIL\s/i,
+      /^MATSON/i, /^APL\s/i, /^YANG\s*MING/i, /^MOL\s/i, /^NYK\s/i,
+      /^HYUNDAI/i, /^HANJIN/i, /^KMTC/i, /^WAN\s*HAI/i, /^SITC/i,
+      /TANKER/i, /CRUDE/i, /CHEMICAL/i, /LNG\s/i, /LPG\s/i,
+      /LEADER$/i, /^ZAANDAM/i, /^CARNIVAL/i, /^PRINCESS/i, /^CELEBRITY/i,
+      /^ROYAL\s*CARIBBEAN/i, /^NAVIGATOR/i, /^EXPLORER\s*OF/i,
+      /^PILOT\s/i, /^TUG\s/i, /^DREDG/i, /^BARGE\s/i,
+    ];
+
+    // MMSI ranges that indicate non-fishing vessels
+    // 2xxxxxxxx = coast stations, 97xxxxxxx = SAR aircraft
+    // Fishing boats: typically 3xxxxxxxx (USA) or 345xxxxxx
+    const isLikelyCargo = (name: string, mmsi: number): boolean => {
+      // Check name patterns
+      if (CARGO_PATTERNS.some(p => p.test(name))) return true;
+      // Very large vessels (MMSI starting with certain country codes + large)
+      // Skip for now — name-based filtering is more reliable
+      return false;
+    };
+
+    // Convert to GeoJSON, filtering out cargo/tankers/cruise ships
+    const features = positions
+      .filter((p: { mmsi: number; name: string }) => !isLikelyCargo(p.name, p.mmsi))
+      .map((p: {
+        mmsi: number;
+        name: string;
+        lat: number;
+        lng: number;
+        sog: number;
+        cog: number;
+        heading: number;
+        timestamp: number;
+      }) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+        properties: {
+          mmsi: p.mmsi,
+          name: p.name,
+          speed: p.sog,
+          heading: p.heading,
+          course: p.cog,
+          age_sec: Math.round((Date.now() - p.timestamp) / 1000),
+          status: p.sog < 1.5 ? 'stopped' : p.sog < 5 ? 'slow' : 'transit',
+        },
+      }));
 
     const stopped = features.filter((f: { properties: { status: string } }) => f.properties.status === 'stopped');
     const slow = features.filter((f: { properties: { status: string } }) => f.properties.status === 'slow');
