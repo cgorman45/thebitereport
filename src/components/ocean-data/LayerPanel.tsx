@@ -63,6 +63,7 @@ const KELP_LAYERS: KelpLayer[] = [
   { id: 'kelp-polygons', color: '#22c55e', label: 'Kelp Outlines' },
   { id: 'kelp-heatmap', color: '#f97316', label: 'Kelp Heatmap' },
   { id: 'boat-kelp-signals', color: '#ff6b35', label: 'Boat Clusters' },
+  { id: 'sar-vessels', color: '#e879f9', label: 'SAR Vessels' },
 ];
 
 function Spinner({ color }: { color: string }) {

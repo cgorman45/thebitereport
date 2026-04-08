@@ -108,6 +108,7 @@ export default function OceanDataMap() {
     'kelp-polygons': false,
     'kelp-heatmap': false,
     'boat-kelp-signals': false,
+    'sar-vessels': false,
     'drift-heatmap': false,
     'current-vectors': false,
     'windy-wind': false,
@@ -126,6 +127,7 @@ export default function OceanDataMap() {
     'kelp-polygons': false,
     'kelp-heatmap': false,
     'boat-kelp-signals': false,
+    'sar-vessels': false,
     'drift-heatmap': false,
     'current-vectors': false,
     'windy-wind': false,
@@ -771,6 +773,39 @@ export default function OceanDataMap() {
           } else {
             if (map.getLayer('boat-kelp-circles')) map.setPaintProperty('boat-kelp-circles', 'circle-opacity', 0);
             if (map.getLayer('boat-kelp-labels')) map.setLayoutProperty('boat-kelp-labels', 'visibility', 'none');
+          }
+        } else if (layerId === 'sar-vessels') {
+          if (turningOn) {
+            const res = await fetch('/api/ocean-data/sar-vessels?days=3');
+            if (!res.ok) { setLayers((prev) => ({ ...prev, [layerId]: false })); return; }
+            const geojson = await res.json();
+            if (!geojson.features || geojson.features.length === 0) {
+              setLayers((prev) => ({ ...prev, [layerId]: false }));
+              return;
+            }
+            if (map.getSource('sar-vessels-source')) {
+              (map.getSource('sar-vessels-source') as mapboxgl.GeoJSONSource).setData(geojson);
+              if (map.getLayer('sar-vessels-circles')) {
+                map.setPaintProperty('sar-vessels-circles', 'circle-opacity', 0.7);
+              }
+            } else {
+              map.addSource('sar-vessels-source', { type: 'geojson', data: geojson });
+              map.addLayer({
+                id: 'sar-vessels-circles',
+                type: 'circle',
+                source: 'sar-vessels-source',
+                paint: {
+                  'circle-radius': ['interpolate', ['linear'], ['get', 'count'], 1, 5, 10, 12, 50, 20],
+                  'circle-color': '#e879f9',
+                  'circle-opacity': 0.7,
+                  'circle-stroke-width': 1,
+                  'circle-stroke-color': '#e879f9',
+                  'circle-stroke-opacity': 0.3,
+                },
+              });
+            }
+          } else {
+            if (map.getLayer('sar-vessels-circles')) map.setPaintProperty('sar-vessels-circles', 'circle-opacity', 0);
           }
         } else if (layerId === 'drift-heatmap') {
           if (turningOn) {
