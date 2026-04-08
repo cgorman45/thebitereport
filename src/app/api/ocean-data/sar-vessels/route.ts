@@ -59,15 +59,14 @@ export async function GET(req: NextRequest) {
 
     const regionBody = {
       geojson: {
-          type: 'Polygon',
-          coordinates: [[
-            [COVERAGE.lngMin, COVERAGE.latMin],
-            [COVERAGE.lngMax, COVERAGE.latMin],
-            [COVERAGE.lngMax, COVERAGE.latMax],
-            [COVERAGE.lngMin, COVERAGE.latMax],
-            [COVERAGE.lngMin, COVERAGE.latMin],
-          ]],
-        },
+        type: 'Polygon',
+        coordinates: [[
+          [COVERAGE.lngMin, COVERAGE.latMin],
+          [COVERAGE.lngMax, COVERAGE.latMin],
+          [COVERAGE.lngMax, COVERAGE.latMax],
+          [COVERAGE.lngMin, COVERAGE.latMax],
+          [COVERAGE.lngMin, COVERAGE.latMin],
+        ]],
       },
     };
 
