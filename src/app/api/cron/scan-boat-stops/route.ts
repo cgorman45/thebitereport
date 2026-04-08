@@ -165,23 +165,46 @@ export async function GET() {
     const now = new Date();
     const lookbackStart = new Date(now.getTime() - LOOKBACK_HOURS * 60 * 60 * 1000);
 
-    // 1. Get all positions from last 24h
-    const { data: positions, error: posError } = await supabase
+    // 1. Get positions from two sources:
+    //    a) Supabase positions table (historical, roster boats)
+    //    b) AIS collector live snapshot (ALL vessels including non-roster)
+
+    // Source A: Supabase historical positions
+    const { data: dbPositions } = await supabase
       .from('positions')
       .select('mmsi, lat, lng, speed, recorded_at')
       .gte('recorded_at', lookbackStart.toISOString())
       .order('recorded_at', { ascending: true });
 
-    if (posError) {
-      return NextResponse.json({ error: posError.message }, { status: 502 });
+    // Source B: Live AIS collector (ALL vessels, not just roster)
+    let livePositions: PositionRecord[] = [];
+    try {
+      const collectorUrl = process.env.AIS_COLLECTOR_URL || 'http://localhost:3001';
+      const liveRes = await fetch(`${collectorUrl}/positions`, { next: { revalidate: 0 } });
+      if (liveRes.ok) {
+        const liveData = await liveRes.json();
+        livePositions = (liveData.positions || []).map((p: { mmsi: number; lat: number; lng: number; sog: number; timestamp: number }) => ({
+          mmsi: p.mmsi,
+          lat: p.lat,
+          lng: p.lng,
+          speed: p.sog,
+          recorded_at: new Date(p.timestamp).toISOString(),
+        }));
+      }
+    } catch {
+      // AIS collector not available — continue with DB data only
     }
 
-    if (!positions || positions.length === 0) {
+    // Merge both sources
+    const positions = [...(dbPositions || []), ...livePositions];
+
+    if (positions.length === 0) {
       return NextResponse.json({
         positions_analyzed: 0,
         stops_detected: 0,
         confirmed_kelp_signals: 0,
-        message: 'No position data in last 24h',
+        message: 'No position data available',
+        sources: { db: dbPositions?.length || 0, live: livePositions.length },
       });
     }
 

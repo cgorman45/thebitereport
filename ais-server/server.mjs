@@ -51,7 +51,8 @@ function connect() {
 
     ws.send(JSON.stringify({
       APIKey: AIS_API_KEY,
-      BoundingBoxes: [[[32.0, -118.5], [33.5, -117.0]]],
+      // Full coverage: Channel Islands (34.3N) to Isla Guadalupe (28.7N)
+      BoundingBoxes: [[[28.7, -120.5], [34.3, -115.0]]],
       FilterMessageTypes: ['PositionReport'],
     }));
   });
