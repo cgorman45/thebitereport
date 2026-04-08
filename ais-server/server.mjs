@@ -53,14 +53,19 @@ function connect() {
       APIKey: AIS_API_KEY,
       // Full coverage: Channel Islands (34.3N) to Isla Guadalupe (28.7N)
       BoundingBoxes: [[[28.7, -120.5], [34.3, -115.0]]],
-      FilterMessageTypes: ['PositionReport'],
+      // Include Class A (PositionReport) AND Class B (StandardClassBPositionReport)
+      // Class B = recreational/fishing boats with smaller transponders
+      FilterMessageTypes: ['PositionReport', 'StandardClassBPositionReport', 'ExtendedClassBPositionReport'],
     }));
   });
 
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString());
-      const r = msg.Message?.PositionReport;
+      // Handle Class A and Class B position reports
+      const r = msg.Message?.PositionReport
+        || msg.Message?.StandardClassBPositionReport
+        || msg.Message?.ExtendedClassBPositionReport;
       if (!r) return;
 
       const mmsi = r.UserID || msg.MetaData?.MMSI;
