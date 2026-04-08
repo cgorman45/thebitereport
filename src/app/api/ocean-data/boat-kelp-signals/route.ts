@@ -14,6 +14,7 @@ const FISHING_SPEED_MAX = 3.0;
 // Minimum boats in a cluster to flag as probable kelp
 const MIN_CLUSTER_BOATS = 2;
 // Maximum distance between boats to be considered a cluster (meters)
+// Also used as the circle radius for boat stop ground truth collection
 const CLUSTER_RADIUS_M = 1000; // 1km
 // Minimum distance from port to exclude docked boats (meters)
 const MIN_PORT_DISTANCE_M = 3000; // 3km from any port
