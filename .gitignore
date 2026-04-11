@@ -52,3 +52,5 @@ ais-server/node_modules/
 # Claude config
 .claude/
 mobile/node_modules/
+services/kelp-detection/ml-training/data/
+services/kelp-detection/ml-training/models/
