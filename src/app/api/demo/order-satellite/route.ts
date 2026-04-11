@@ -50,11 +50,17 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Pick the best scene (most recent, least cloud)
-    const bestScene = scenes[0]; // Already sorted by date, filtered by cloud
+    const bestScene = scenes[0];
 
-    // 3. Order the scene
-    const orderName = `kelp-signal-${score || 0}-${lat.toFixed(3)}-${Math.abs(lng).toFixed(3)}`;
-    const order = await orderScene(bestScene.id, lat, lng, orderName);
+    // 3. Try to order — may fail on trial accounts
+    let order = null;
+    try {
+      const orderName = `kelp-signal-${score || 0}-${lat.toFixed(3)}-${Math.abs(lng).toFixed(3)}`;
+      order = await orderScene(bestScene.id, lat, lng, orderName);
+    } catch (orderErr) {
+      // Trial accounts can't order — that's OK, we still show the search results
+      console.log('[order-satellite] Order failed (trial account?):', orderErr instanceof Error ? orderErr.message : String(orderErr));
+    }
 
     // 4. Update boat_stops if ID provided
     if (boat_stop_id) {
@@ -81,9 +87,12 @@ export async function POST(req: NextRequest) {
         resolution: bestScene.pixel_resolution,
         satellite: bestScene.satellite_id,
       },
-      order: {
+      order: order ? {
         id: order.orderId,
         status: order.status,
+      } : {
+        id: 'trial-limited',
+        status: 'Scene identified — upgrade Planet account to download',
       },
       location: { lat, lng },
       total_scenes_available: scenes.length,

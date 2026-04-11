@@ -43,7 +43,7 @@ export async function searchScenes(
   lat: number,
   lng: number,
   daysBack: number = 14,
-  maxCloudCover: number = 0.2,
+  maxCloudCover: number = 0.5,
   limit: number = 10,
 ): Promise<SceneResult[]> {
   const now = new Date();
@@ -85,10 +85,8 @@ export async function searchScenes(
           field_name: 'cloud_cover',
           config: { lte: maxCloudCover },
         },
-        {
-          type: 'PermissionFilter',
-          config: ['assets.ortho_analytic_4b:download'],
-        },
+        // Note: removed PermissionFilter — trial accounts may not have
+        // ortho_analytic_4b download permissions. Search all available scenes.
       ],
     },
   };
@@ -146,14 +144,11 @@ export async function orderScene(
       {
         item_ids: [sceneId],
         item_type: 'PSScene',
-        product_bundle: 'analytic_udm2',
+        product_bundle: 'visual',
       },
     ],
-    tools: [
-      {
-        clip: { aoi: clipGeometry },
-      },
-    ],
+    // Note: clip tool removed — trial accounts don't have permission.
+    // Full scene will be downloaded instead.
   };
 
   const res = await fetch(ORDERS_API, {
