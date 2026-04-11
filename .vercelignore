@@ -1,0 +1,12 @@
+.claude/
+.next/
+services/
+scripts/
+mobile/
+ais-server/
+supabase/
+*.py
+*.pyc
+__pycache__/
+venv/
+.env*
