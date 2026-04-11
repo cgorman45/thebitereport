@@ -97,8 +97,8 @@ export default function DetectionDetailPage() {
 
   const fetchDetection = useCallback(async () => {
     const headers: Record<string, string> = {};
-    if (auth?.session?.access_token) {
-      headers.Authorization = `Bearer ${auth.session.access_token}`;
+    if ((auth as any)?.session?.access_token) {
+      headers.Authorization = `Bearer ${(auth as any).session.access_token}`;
     }
 
     const res = await fetch(`/api/admin/kelp-detections?status=all&limit=100`, { headers });
@@ -107,7 +107,7 @@ export default function DetectionDetailPage() {
     const found = data.detections.find((d: Detection) => d.id === params.id);
     setDetection(found || null);
     setLoading(false);
-  }, [params.id, auth?.session?.access_token]);
+  }, [params.id, (auth as any)?.session?.access_token]);
 
   useEffect(() => { fetchDetection(); }, [fetchDetection]);
 
@@ -116,8 +116,8 @@ export default function DetectionDetailPage() {
     setReviewLoading(true);
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (auth?.session?.access_token) {
-      headers.Authorization = `Bearer ${auth.session.access_token}`;
+    if ((auth as any)?.session?.access_token) {
+      headers.Authorization = `Bearer ${(auth as any).session.access_token}`;
     }
 
     const res = await fetch(`/api/admin/kelp-detections/${detection.id}`, {

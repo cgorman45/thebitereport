@@ -60,7 +60,7 @@ export function extractBreaks(
   for (const contour of contourResults) {
     for (const polygon of contour.coordinates) {
       for (const ring of polygon) {
-        const lngLat = ring.map((pos) => {
+        const lngLat = ring.map((pos: number[]) => {
           const px = pos[0];
           const py = pos[1];
           return [

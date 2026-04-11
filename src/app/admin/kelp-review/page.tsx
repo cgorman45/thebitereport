@@ -46,8 +46,8 @@ export default function KelpReviewPage() {
       });
 
       const headers: Record<string, string> = {};
-      if (auth?.session?.access_token) {
-        headers.Authorization = `Bearer ${auth.session.access_token}`;
+      if ((auth as any)?.session?.access_token) {
+        headers.Authorization = `Bearer ${(auth as any).session.access_token}`;
       }
 
       const res = await fetch(`/api/admin/kelp-detections?${params}`, { headers });
@@ -65,20 +65,20 @@ export default function KelpReviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sortBy, auth?.session?.access_token]);
+  }, [statusFilter, sortBy, (auth as any)?.session?.access_token]);
 
   useEffect(() => {
     if (isAdmin) fetchDetections();
   }, [isAdmin, fetchDetections]);
 
   const handleReview = async (id: string, status: 'approved' | 'rejected', notes: string) => {
-    if (!auth?.session?.access_token) return;
+    if (!(auth as any)?.session?.access_token) return;
 
     const res = await fetch(`/api/admin/kelp-detections/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${auth.session.access_token}`,
+        Authorization: `Bearer ${(auth as any).session.access_token}`,
       },
       body: JSON.stringify({ status, notes }),
     });
@@ -91,7 +91,7 @@ export default function KelpReviewPage() {
   };
 
   const handleBulkReview = async (status: 'approved' | 'rejected') => {
-    if (!auth?.session?.access_token || selected.size === 0) return;
+    if (!(auth as any)?.session?.access_token || selected.size === 0) return;
     setBulkLoading(true);
 
     const promises = Array.from(selected).map((id) =>
@@ -99,7 +99,7 @@ export default function KelpReviewPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${auth.session.access_token}`,
+          Authorization: `Bearer ${(auth as any).session.access_token}`,
         },
         body: JSON.stringify({ status }),
       }),
