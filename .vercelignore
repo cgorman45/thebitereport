@@ -1,10 +1,10 @@
-.claude/
-.next/
-services/
-scripts/
-mobile/
-ais-server/
-supabase/
+/.claude/
+/.next/
+/services/
+/scripts/
+/mobile/
+/ais-server/
+/supabase/
 *.py
 *.pyc
 __pycache__/
