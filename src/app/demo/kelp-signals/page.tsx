@@ -117,6 +117,41 @@ export default function KelpSignalsDemo() {
   const [loading, setLoading] = useState(true);
   const [vesselMeta, setVesselMeta] = useState<{ total: number; stopped: number; slow: number } | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [ordering, setOrdering] = useState<Set<string>>(new Set());
+  const [orderResults, setOrderResults] = useState<Record<string, { scene: string; orderId: string; status: string }>>({});
+
+  const handleOrderSatellite = async (zone: ScoredZone) => {
+    setOrdering(prev => new Set(prev).add(zone.id));
+    try {
+      const res = await fetch('/api/demo/order-satellite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: zone.lat,
+          lng: zone.lng,
+          boat_stop_id: zone.id,
+          score: zone.score,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrderResults(prev => ({
+          ...prev,
+          [zone.id]: {
+            scene: data.scene.id,
+            orderId: data.order.id,
+            status: data.order.status,
+          },
+        }));
+      } else {
+        alert(data.message || data.error || 'No scenes available');
+      }
+    } catch (err) {
+      alert('Order failed: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setOrdering(prev => { const n = new Set(prev); n.delete(zone.id); return n; });
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -294,13 +329,25 @@ export default function KelpSignalsDemo() {
                         )}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
-                        <span style={{
-                          padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
-                          background: actionColor(zone.satellite_action) + '22',
-                          color: actionColor(zone.satellite_action),
-                        }}>
-                          {actionLabel(zone.satellite_action)}
-                        </span>
+                        {orderResults[zone.id] ? (
+                          <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#22c55e22', color: '#22c55e' }}>
+                            ORDERED
+                          </span>
+                        ) : zone.score >= 3 ? (
+                          <button
+                            onClick={() => handleOrderSatellite(zone)}
+                            disabled={ordering.has(zone.id)}
+                            style={{
+                              padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                              background: ordering.has(zone.id) ? '#4a5568' : actionColor(zone.satellite_action),
+                              color: '#fff', border: 'none', cursor: ordering.has(zone.id) ? 'wait' : 'pointer',
+                            }}
+                          >
+                            {ordering.has(zone.id) ? 'Ordering...' : `Order ${actionLabel(zone.satellite_action)}`}
+                          </button>
+                        ) : (
+                          <span style={{ color: '#4a5568', fontSize: 11 }}>Score too low</span>
+                        )}
                       </td>
                       <td style={{ padding: '12px 14px', color: '#667788', fontSize: 12 }}>
                         {zone.boats.length > 0 ? relativeTime(zone.boats[0].stopped_at) : '—'}
