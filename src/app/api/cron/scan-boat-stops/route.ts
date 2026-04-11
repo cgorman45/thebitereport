@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { PORTS } from '@/lib/fleet/boats';
+import { isNearIsland } from '@/lib/ocean-data/proximity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -79,7 +80,7 @@ function detectStops(positions: PositionRecord[]): DetectedStop[] {
     let stopPositions: PositionRecord[] = [];
 
     for (const pos of boatPositions) {
-      if (pos.speed <= STOP_SPEED_MAX && inCoverage(pos.lat, pos.lng) && !isNearPort(pos.lat, pos.lng)) {
+      if (pos.speed <= STOP_SPEED_MAX && inCoverage(pos.lat, pos.lng) && !isNearPort(pos.lat, pos.lng) && !isNearIsland(pos.lat, pos.lng)) {
         if (!stopStart) {
           stopStart = pos;
           stopPositions = [pos];

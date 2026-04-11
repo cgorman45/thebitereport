@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { FLEET_ROSTER, PORTS } from '@/lib/fleet/boats';
+import { isNearIsland } from '@/lib/ocean-data/proximity';
 import * as cache from '@/lib/ocean-data/cache';
 
 export const runtime = 'nodejs';
@@ -85,6 +86,9 @@ export async function GET() {
 
       // Must NOT be near a port
       if (isNearPort(pos.lat, pos.lng)) return false;
+
+      // Must NOT be near an island — boats at islands create false kelp-paddy hotspots
+      if (isNearIsland(pos.lat, pos.lng)) return false;
 
       return true;
     });
