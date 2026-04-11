@@ -117,8 +117,31 @@ export default function KelpSignalsDemo() {
   const [loading, setLoading] = useState(true);
   const [vesselMeta, setVesselMeta] = useState<{ total: number; stopped: number; slow: number } | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [paddyData, setPaddyData] = useState<{ type: string; features: object[] } | null>(null);
+  const [confirming, setConfirming] = useState<Set<string>>(new Set());
   const [ordering, setOrdering] = useState<Set<string>>(new Set());
   const [orderResults, setOrderResults] = useState<Record<string, { scene: string; orderId: string; status: string }>>({});
+
+  const handleConfirmKelp = async (zone: ScoredZone) => {
+    setConfirming(prev => new Set(prev).add(zone.id));
+    try {
+      const res = await fetch('/api/demo/confirm-kelp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: zone.lat, lng: zone.lng, boat_stop_id: zone.id }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        fetchData(); // refresh to show the new paddy + drift path
+      } else {
+        alert(result.error || 'Failed to confirm');
+      }
+    } catch (err) {
+      alert('Error: ' + String(err));
+    } finally {
+      setConfirming(prev => { const n = new Set(prev); n.delete(zone.id); return n; });
+    }
+  };
 
   const handleOrderSatellite = async (zone: ScoredZone) => {
     setOrdering(prev => new Set(prev).add(zone.id));
@@ -155,14 +178,20 @@ export default function KelpSignalsDemo() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [scoresRes, vesselsRes] = await Promise.all([
+      const [scoresRes, vesselsRes, paddyRes] = await Promise.all([
         fetch('/api/demo/kelp-scores'),
         fetch('/api/ocean-data/all-vessels'),
+        fetch('/api/demo/kelp-paddies'),
       ]);
 
       if (scoresRes.ok) {
         const scores = await scoresRes.json();
         setData(scores);
+      }
+
+      if (paddyRes.ok) {
+        const paddies = await paddyRes.json();
+        setPaddyData(paddies);
       }
 
       if (vesselsRes.ok) {
@@ -248,6 +277,61 @@ export default function KelpSignalsDemo() {
               <Layer {...circleFillLayer} />
               <Layer {...scoreLabelLayer} />
             </Source>
+
+            {/* Confirmed kelp paddies + drift paths */}
+            {paddyData && (
+              <Source id="kelp-paddies" type="geojson" data={paddyData as GeoJSON.FeatureCollection}>
+                {/* Predicted drift path — dashed line */}
+                <Layer
+                  id="drift-path-line"
+                  type="line"
+                  filter={['==', ['get', 'type'], 'drift-path']}
+                  paint={{
+                    'line-color': '#00d4ff',
+                    'line-width': 2,
+                    'line-dasharray': [4, 4],
+                    'line-opacity': 0.7,
+                  }}
+                />
+                {/* Historical drift — solid line */}
+                <Layer
+                  id="drift-history-line"
+                  type="line"
+                  filter={['==', ['get', 'type'], 'drift-history']}
+                  paint={{
+                    'line-color': '#22c55e',
+                    'line-width': 3,
+                    'line-opacity': 0.8,
+                  }}
+                />
+                {/* Kelp paddy icon — green circle with white border */}
+                <Layer
+                  id="kelp-paddy-icon"
+                  type="circle"
+                  filter={['==', ['get', 'type'], 'kelp-paddy']}
+                  paint={{
+                    'circle-radius': 10,
+                    'circle-color': '#22c55e',
+                    'circle-opacity': 1,
+                    'circle-stroke-width': 3,
+                    'circle-stroke-color': '#ffffff',
+                  }}
+                />
+                {/* Drift endpoint — small cyan circle */}
+                <Layer
+                  id="drift-endpoint"
+                  type="circle"
+                  filter={['==', ['get', 'type'], 'drift-endpoint']}
+                  paint={{
+                    'circle-radius': 5,
+                    'circle-color': '#00d4ff',
+                    'circle-opacity': 0.6,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#00d4ff',
+                  }}
+                />
+              </Source>
+            )}
           </Map>
         </div>
 
@@ -266,6 +350,9 @@ export default function KelpSignalsDemo() {
           <span style={{ color: '#f97316' }}>●</span> Score 3-4
           <span style={{ color: '#eab308' }}>●</span> Score 5-6 (med-res satellite)
           <span style={{ color: '#ef4444' }}>●</span> Score 7+ (high-res satellite)
+          <div style={{ width: 1, height: 16, background: '#1e2a42', margin: '0 4px' }} />
+          <span style={{ color: '#22c55e' }}>●</span> Confirmed kelp
+          <span style={{ color: '#00d4ff' }}>- -</span> Predicted drift
         </div>
 
         {/* Zones table */}
@@ -290,7 +377,7 @@ export default function KelpSignalsDemo() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #1e2a42' }}>
-                    {['Score', 'Location', 'Boats', 'Max Duration', 'Confirmed', 'Satellite Action', 'Last Activity'].map(h => (
+                    {['Score', 'Location', 'Boats', 'Max Duration', 'Confirmed', 'Satellite Action', 'Track Kelp', 'Last Activity'].map(h => (
                       <th key={h} style={{ padding: '10px 14px', textAlign: 'left', color: '#667788', fontWeight: 600, fontSize: 11, textTransform: 'uppercase' }}>{h}</th>
                     ))}
                   </tr>
@@ -347,6 +434,23 @@ export default function KelpSignalsDemo() {
                           </button>
                         ) : (
                           <span style={{ color: '#4a5568', fontSize: 11 }}>Score too low</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        {zone.confirmed ? (
+                          <button
+                            onClick={() => handleConfirmKelp(zone)}
+                            disabled={confirming.has(zone.id)}
+                            style={{
+                              padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 700,
+                              background: confirming.has(zone.id) ? '#4a5568' : '#22c55e',
+                              color: '#fff', border: 'none', cursor: confirming.has(zone.id) ? 'wait' : 'pointer',
+                            }}
+                          >
+                            {confirming.has(zone.id) ? 'Confirming...' : 'Confirm & Track'}
+                          </button>
+                        ) : (
+                          <span style={{ color: '#4a5568', fontSize: 11 }}>Needs 2+ boats</span>
                         )}
                       </td>
                       <td style={{ padding: '12px 14px', color: '#667788', fontSize: 12 }}>
