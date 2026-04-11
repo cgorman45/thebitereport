@@ -105,6 +105,7 @@ export async function searchScenes(
   const data = await res.json();
   const features = data.features || [];
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return features.slice(0, limit).map((f: any) => ({
     id: f.id,
     acquired: f.properties.acquired,
@@ -185,6 +186,7 @@ export async function checkOrderStatus(orderId: string): Promise<{
   }
 
   const data = await res.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const results = data._links?.results?.map((r: any) => ({
     location: r.location,
     name: r.name,
