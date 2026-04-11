@@ -118,6 +118,7 @@ export default function KelpSignalsDemo() {
   const [vesselMeta, setVesselMeta] = useState<{ total: number; stopped: number; slow: number } | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [paddyData, setPaddyData] = useState<{ type: string; features: object[] } | null>(null);
+  const [vesselData, setVesselData] = useState<{ type: string; features: object[] } | null>(null);
   const [confirming, setConfirming] = useState<Set<string>>(new Set());
   const [ordering, setOrdering] = useState<Set<string>>(new Set());
   const [orderResults, setOrderResults] = useState<Record<string, { scene: string; orderId: string; status: string }>>({});
@@ -196,6 +197,7 @@ export default function KelpSignalsDemo() {
 
       if (vesselsRes.ok) {
         const vessels = await vesselsRes.json();
+        setVesselData(vessels);
         setVesselMeta({
           total: vessels.meta?.total_vessels || 0,
           stopped: vessels.meta?.stopped || 0,
@@ -278,6 +280,34 @@ export default function KelpSignalsDemo() {
               <Layer {...scoreLabelLayer} />
             </Source>
 
+            {/* Live AIS vessels */}
+            {vesselData && (
+              <Source id="demo-vessels" type="geojson" data={vesselData as GeoJSON.FeatureCollection}>
+                <Layer
+                  id="demo-vessels-stopped"
+                  type="circle"
+                  filter={['==', ['get', 'status'], 'stopped']}
+                  paint={{
+                    'circle-radius': 4,
+                    'circle-color': '#ef4444',
+                    'circle-opacity': 0.7,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#fff',
+                  }}
+                />
+                <Layer
+                  id="demo-vessels-moving"
+                  type="circle"
+                  filter={['!=', ['get', 'status'], 'stopped']}
+                  paint={{
+                    'circle-radius': 3,
+                    'circle-color': '#38bdf8',
+                    'circle-opacity': 0.3,
+                  }}
+                />
+              </Source>
+            )}
+
             {/* Confirmed kelp paddies + drift paths */}
             {paddyData && (
               <Source id="kelp-paddies" type="geojson" data={paddyData as GeoJSON.FeatureCollection}>
@@ -350,6 +380,9 @@ export default function KelpSignalsDemo() {
           <span style={{ color: '#f97316' }}>●</span> Score 3-4
           <span style={{ color: '#eab308' }}>●</span> Score 5-6 (med-res satellite)
           <span style={{ color: '#ef4444' }}>●</span> Score 7+ (high-res satellite)
+          <div style={{ width: 1, height: 16, background: '#1e2a42', margin: '0 4px' }} />
+          <span style={{ color: '#ef4444', fontSize: 8 }}>●</span> Stopped vessel
+          <span style={{ color: '#38bdf8', fontSize: 8 }}>●</span> Moving vessel
           <div style={{ width: 1, height: 16, background: '#1e2a42', margin: '0 4px' }} />
           <span style={{ color: '#22c55e' }}>●</span> Confirmed kelp
           <span style={{ color: '#00d4ff' }}>- -</span> Predicted drift
