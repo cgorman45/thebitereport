@@ -18,6 +18,7 @@ const NAV_LINKS = [
   { href: '/reports', label: 'Reports' },
   { href: '/local-intel', label: 'Intel' },
   { href: '/tutorials', label: 'Tutorials' },
+  { href: '/demo/kelp-signals', label: 'Demo' },
 ];
 
 export default function Header() {
