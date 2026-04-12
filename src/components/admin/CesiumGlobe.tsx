@@ -184,14 +184,62 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Trajectory playback
+  // Smooth animated trajectory playback using requestAnimationFrame
+  const trajProgressRef = useRef(0); // Sub-index progress 0-1 between snapshots
   useEffect(() => {
-    if (!trajPlaying || trajectories.length === 0) return;
-    const interval = setInterval(() => {
-      setTrajIndex(i => i >= trajectories.length - 1 ? (setTrajPlaying(false), i) : i + 1);
-    }, 150);
-    return () => clearInterval(interval);
-  }, [trajPlaying, trajectories.length]);
+    if (!trajPlaying || trajectories.length < 2) return;
+    let animId: number;
+    let lastTime = performance.now();
+
+    const animate = (now: number) => {
+      const dt = now - lastTime;
+      lastTime = now;
+
+      // Advance progress — each snapshot takes ~120ms (speed adjustable)
+      const speed = 0.008 * dt; // ~8 snapshots per second at 60fps
+      trajProgressRef.current += speed;
+
+      if (trajProgressRef.current >= 1) {
+        trajProgressRef.current = 0;
+        setTrajIndex(i => {
+          if (i >= trajectories.length - 2) { setTrajPlaying(false); return i; }
+          return i + 1;
+        });
+      }
+
+      // Interpolate vessel positions between current and next snapshot
+      const viewer = viewerRef.current;
+      const Cesium = (window as any).Cesium;
+      if (viewer && Cesium && trajectories[trajIndex] && trajectories[trajIndex + 1]) {
+        const curr = trajectories[trajIndex];
+        const next = trajectories[trajIndex + 1];
+        const t = trajProgressRef.current;
+
+        for (const v of curr.vessels) {
+          const nextV = next.vessels.find((n: any) => n.mmsi === v.mmsi);
+          if (!nextV) continue;
+
+          const entity = viewer.entities.getById(`traj-vessel-${v.mmsi}`);
+          if (entity) {
+            const interpLat = v.lat + (nextV.lat - v.lat) * t;
+            const interpLng = v.lng + (nextV.lng - v.lng) * t;
+            entity.position = Cesium.Cartesian3.fromDegrees(interpLng, interpLat, 0);
+
+            // Interpolate heading
+            const interpHeading = v.heading + (nextV.heading - v.heading) * t;
+            if (entity.billboard) {
+              entity.billboard.rotation = -Cesium.Math.toRadians(interpHeading || 0);
+            }
+          }
+        }
+      }
+
+      animId = requestAnimationFrame(animate);
+    };
+
+    animId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animId);
+  }, [trajPlaying, trajectories, trajIndex]);
 
   // Fly to fishing spot
   const flyToSpot = useCallback((spot: FishingSpot) => {
