@@ -106,19 +106,29 @@ function interpolateAngle(a: number, b: number, t: number): number {
 
 // Known port/harbor locations — vessels near these are parked, not fishing
 const HARBORS = [
-  { lat: 32.715, lng: -117.175, radiusKm: 5, name: 'San Diego Harbor/Bay' },
+  // San Diego Bay is long — need multiple overlapping circles
+  { lat: 32.720, lng: -117.180, radiusKm: 4, name: 'San Diego Harbor North' },
+  { lat: 32.680, lng: -117.130, radiusKm: 4, name: 'San Diego Bay South' },
+  { lat: 32.650, lng: -117.110, radiusKm: 3, name: 'National City/Chula Vista' },
+  { lat: 32.630, lng: -117.100, radiusKm: 2, name: 'South Bay' },
   { lat: 32.755, lng: -117.215, name: 'Mission Bay', radiusKm: 2.5 },
-  { lat: 32.850, lng: -117.260, name: 'La Jolla Shore', radiusKm: 1.5 },
+  { lat: 32.850, lng: -117.260, name: 'La Jolla Shore', radiusKm: 1 },
   { lat: 33.460, lng: -117.620, name: 'Dana Point', radiusKm: 1.5 },
-  { lat: 33.750, lng: -118.280, name: 'Long Beach/LA Harbor', radiusKm: 5 },
+  { lat: 33.750, lng: -118.280, name: 'Long Beach/LA Harbor', radiusKm: 6 },
+  { lat: 33.770, lng: -118.200, name: 'Long Beach Inner', radiusKm: 4 },
   { lat: 33.600, lng: -117.900, name: 'Newport/Huntington', radiusKm: 2 },
   { lat: 33.725, lng: -118.270, name: 'San Pedro', radiusKm: 3 },
+  { lat: 33.860, lng: -118.400, name: 'Marina del Rey', radiusKm: 2 },
   { lat: 33.210, lng: -117.395, name: 'Oceanside Harbor', radiusKm: 1.5 },
   { lat: 34.410, lng: -119.690, name: 'Santa Barbara', radiusKm: 2 },
   { lat: 34.170, lng: -119.225, name: 'Ventura Harbor', radiusKm: 1.5 },
   { lat: 33.340, lng: -118.330, name: 'Avalon/Catalina', radiusKm: 1 },
   { lat: 31.870, lng: -116.625, name: 'Ensenada Harbor', radiusKm: 2 },
-  { lat: 32.430, lng: -117.245, name: 'Coronado Cays', radiusKm: 1 },
+  { lat: 32.430, lng: -117.245, name: 'Coronado Cays', radiusKm: 1.5 },
+  // Additional coastal areas that aren't open ocean fishing
+  { lat: 33.025, lng: -117.280, name: 'Del Mar/Solana Beach', radiusKm: 1 },
+  { lat: 33.140, lng: -117.330, name: 'Carlsbad', radiusKm: 1 },
+  { lat: 33.420, lng: -117.600, name: 'San Clemente Shore', radiusKm: 1 },
 ];
 
 function isInHarbor(lat: number, lng: number): boolean {
@@ -211,12 +221,33 @@ export function detectHotspots(
     if (durationMin < 10 && boatCount < 5) continue;
     const score = Math.min(10, Math.round(boatCount * 1.5 + durationMin / 20));
 
+    // Cross-reference with chart waypoints
+    let nearbyWaypoint = '';
+    try {
+      const { getWaypointsNear } = require('@/lib/ocean-data/baja-directions-waypoints');
+      const nearby = getWaypointsNear(hs.lat, hs.lng, 5);
+      if (nearby.length > 0) {
+        nearbyWaypoint = ` Near chart waypoint: ${nearby[0].name}.`;
+      }
+    } catch { /* module not available */ }
+
+    // Also check fishing spots
+    try {
+      const { FISHING_SPOTS } = require('@/lib/ocean-data/fishing-spots');
+      for (const spot of FISHING_SPOTS) {
+        if (distKm(hs.lat, hs.lng, spot.lat, spot.lng) < 8) {
+          nearbyWaypoint += ` Near ${spot.name}.`;
+          break;
+        }
+      }
+    } catch { /* module not available */ }
+
     // Generate narrative
     const boatNames = vessels.slice(0, 3).map(v => v.name).join(', ');
     const moreBoats = vessels.length > 3 ? ` and ${vessels.length - 3} more` : '';
-    const narrative = `${boatCount} vessels converged at ${hs.lat.toFixed(3)}°N, ${Math.abs(hs.lng).toFixed(3)}°W. ` +
-      `${boatNames}${moreBoats} stopped/slowed for ~${Math.round(durationMin)} minutes. ` +
-      `Confidence: ${score}/10. ${score >= 7 ? 'HIGH — likely kelp paddy or bait school.' : score >= 4 ? 'MEDIUM — possible fishing activity.' : 'LOW — brief convergence.'}`;
+    const narrative = `${boatCount} vessels converged at ${hs.lat.toFixed(3)}°N, ${Math.abs(hs.lng).toFixed(3)}°W.${nearbyWaypoint} ` +
+      `${boatNames}${moreBoats} fished for ~${Math.round(durationMin)} minutes. ` +
+      `${score >= 7 ? 'HIGH confidence — likely kelp paddy or bait school.' : score >= 4 ? 'MEDIUM — possible fishing activity.' : 'LOW — brief convergence.'}`;
 
     hotspots.push({
       id: key,
