@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { FISHING_SPOTS } from '@/lib/ocean-data/fishing-spots';
+import type { FishingSpot } from '@/lib/ocean-data/fishing-spots';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface SatPosition {
@@ -14,27 +16,30 @@ interface OrbitPath {
   positions: { lat: number; lng: number; alt: number }[];
 }
 
+interface SatOrder {
+  id: string; lat: number; lng: number; tier: string; provider: string;
+  status: string; resolution: number; ordered_at: string; scene_id: string;
+}
+
+interface TimeSnapshot {
+  timestamp: string;
+  vessels: { mmsi: number; name: string; lat: number; lng: number; speed: number; heading: number }[];
+}
+
 interface CesiumGlobeProps {
   cesiumIonToken?: string;
 }
 
-// Load CesiumJS from CDN (avoids webpack octal escape issue)
+// Load CesiumJS from CDN
 function loadCesiumFromCDN(): Promise<any> {
   return new Promise((resolve, reject) => {
-    if ((window as any).Cesium) {
-      resolve((window as any).Cesium);
-      return;
-    }
-
-    // Add CSS
+    if ((window as any).Cesium) { resolve((window as any).Cesium); return; }
     if (!document.querySelector('link[href*="cesium"]')) {
       const css = document.createElement('link');
       css.rel = 'stylesheet';
       css.href = 'https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Widgets/widgets.css';
       document.head.appendChild(css);
     }
-
-    // Add Script
     const script = document.createElement('script');
     script.src = 'https://cesium.com/downloads/cesiumjs/releases/1.119/Build/Cesium/Cesium.js';
     script.onload = () => resolve((window as any).Cesium);
@@ -43,29 +48,38 @@ function loadCesiumFromCDN(): Promise<any> {
   });
 }
 
+// ── Main Component ─────────────────────────────────────────────────────
 export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Data
   const [satData, setSatData] = useState<{ positions: SatPosition[]; orbits: OrbitPath[] } | null>(null);
   const [vessels, setVessels] = useState<any[]>([]);
-  const [showOrbits, setShowOrbits] = useState(true);
-  const [showVessels, setShowVessels] = useState(true);
-  const [showFootprints, setShowFootprints] = useState(true);
+  const [satOrders, setSatOrders] = useState<SatOrder[]>([]);
+  const [trajectories, setTrajectories] = useState<TimeSnapshot[]>([]);
+  const [trajIndex, setTrajIndex] = useState(0);
+  const [trajPlaying, setTrajPlaying] = useState(false);
+  const [selectedSpot, setSelectedSpot] = useState<FishingSpot | null>(null);
 
-  // Load CesiumJS and create viewer
+  // Layers
+  const [showSatellites, setShowSatellites] = useState(false); // Off by default to reduce clutter
+  const [showVessels, setShowVessels] = useState(true);
+  const [showSpots, setShowSpots] = useState(true);
+  const [showOrders, setShowOrders] = useState(true);
+  const [showTrajectories, setShowTrajectories] = useState(false);
+
+  // Initialize CesiumJS
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return;
-
     let cancelled = false;
 
     loadCesiumFromCDN().then(Cesium => {
       if (cancelled || !containerRef.current) return;
 
-      if (cesiumIonToken) {
-        Cesium.Ion.defaultAccessToken = cesiumIonToken;
-      }
+      if (cesiumIonToken) Cesium.Ion.defaultAccessToken = cesiumIonToken;
 
       const viewer = new Cesium.Viewer(containerRef.current, {
         baseLayerPicker: false,
@@ -82,75 +96,63 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         skyAtmosphere: new Cesium.SkyAtmosphere(),
       });
 
-      // Try Google 3D tiles
+      // Google 3D tiles
       if (cesiumIonToken) {
         try {
-          Cesium.createGooglePhotorealistic3DTileset().then((tileset: any) => {
-            viewer.scene.primitives.add(tileset);
-          }).catch(() => {
-            console.log('[Cesium] Google 3D tiles not available');
-          });
+          Cesium.createGooglePhotorealistic3DTileset().then((t: any) => {
+            viewer.scene.primitives.add(t);
+          }).catch(() => {});
         } catch { /* ignore */ }
       }
 
-      // Camera: SoCal/Baja overview
+      // Camera: SoCal overview
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(-117.5, 31.5, 1500000),
-        orientation: {
-          heading: Cesium.Math.toRadians(0),
-          pitch: Cesium.Math.toRadians(-60),
-          roll: 0,
-        },
+        destination: Cesium.Cartesian3.fromDegrees(-117.5, 31.5, 1200000),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
         duration: 0,
       });
 
       viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#050a15');
       viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a1628');
+      viewer.scene.screenSpaceCameraController.enableZoom = true;
+      viewer.scene.screenSpaceCameraController.enableRotate = true;
+      viewer.scene.screenSpaceCameraController.enableTilt = true;
 
       // Coverage area outline
       viewer.entities.add({
+        id: 'coverage-area',
         name: 'Coverage Area',
         polyline: {
           positions: Cesium.Cartesian3.fromDegreesArray([
             -120.5, 28.7, -115.0, 28.7, -115.0, 34.3, -120.5, 34.3, -120.5, 28.7,
           ]),
           width: 2,
-          material: Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.4),
+          material: Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.3),
           clampToGround: true,
         },
       });
 
-      // Ensure scene controller is enabled for mouse/touch input
-      viewer.scene.screenSpaceCameraController.enableZoom = true;
-      viewer.scene.screenSpaceCameraController.enableRotate = true;
-      viewer.scene.screenSpaceCameraController.enableTilt = true;
-      viewer.scene.screenSpaceCameraController.enableLook = true;
-
       viewerRef.current = viewer;
       setLoaded(true);
-    }).catch(err => {
-      setError(err.message);
-    });
+    }).catch(err => setError(err.message));
 
-    return () => {
-      cancelled = true;
-      if (viewerRef.current) {
-        viewerRef.current.destroy();
-        viewerRef.current = null;
-      }
-    };
+    return () => { cancelled = true; if (viewerRef.current) { viewerRef.current.destroy(); viewerRef.current = null; } };
   }, [cesiumIonToken]);
 
-  // Fetch data
+  // Fetch all data
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [satRes, vesRes] = await Promise.all([
+        const [satRes, vesRes, ordRes, trajRes] = await Promise.all([
           fetch('/api/ocean-data/satellite-orbits?orbit_minutes=90'),
           fetch('/api/ocean-data/all-vessels'),
+          fetch('/api/admin/satellite-orders').catch(() => null),
+          fetch('/api/ocean-data/vessel-trajectories?hours_back=48&interval_minutes=10').catch(() => null),
         ]);
         if (satRes.ok) setSatData(await satRes.json());
         if (vesRes.ok) { const d = await vesRes.json(); setVessels(d.features || []); }
+        if (ordRes?.ok) { const d = await ordRes.json(); setSatOrders(d.orders || []); }
+        if (trajRes?.ok) { const d = await trajRes.json(); setTrajectories(d.snapshots || []); setTrajIndex(d.snapshots?.length - 1 || 0); }
       } catch { /* ignore */ }
     };
     fetchAll();
@@ -158,106 +160,264 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // Update entities
+  // Trajectory playback
+  useEffect(() => {
+    if (!trajPlaying || trajectories.length === 0) return;
+    const interval = setInterval(() => {
+      setTrajIndex(i => i >= trajectories.length - 1 ? (setTrajPlaying(false), i) : i + 1);
+    }, 150);
+    return () => clearInterval(interval);
+  }, [trajPlaying, trajectories.length]);
+
+  // Fly to fishing spot
+  const flyToSpot = useCallback((spot: FishingSpot) => {
+    const Cesium = (window as any).Cesium;
+    if (!viewerRef.current || !Cesium) return;
+    setSelectedSpot(spot);
+    setShowTrajectories(true);
+    viewerRef.current.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat, spot.zoom),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+      duration: 2,
+    });
+  }, []);
+
+  // Reset view
+  const resetView = useCallback(() => {
+    const Cesium = (window as any).Cesium;
+    if (!viewerRef.current || !Cesium) return;
+    setSelectedSpot(null);
+    viewerRef.current.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(-117.5, 31.5, 1200000),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
+      duration: 2,
+    });
+  }, []);
+
+  // ── Update entities ──────────────────────────────────────────────────
   useEffect(() => {
     const viewer = viewerRef.current;
-    if (!viewer || !satData || !loaded) return;
-
+    if (!viewer || !loaded) return;
     const Cesium = (window as any).Cesium;
     if (!Cesium) return;
 
-    // Remove old entities
+    // Clear dynamic entities
     const toRemove: any[] = [];
     viewer.entities.values.forEach((e: any) => {
-      if (e.id?.startsWith('sat-') || e.id?.startsWith('orbit-') || e.id?.startsWith('vessel-')) {
-        toRemove.push(e);
-      }
+      if (e.id && e.id !== 'coverage-area') toRemove.push(e);
     });
     toRemove.forEach((e: any) => viewer.entities.remove(e));
 
-    // Satellites
-    for (const sat of satData.positions) {
-      const altMeters = sat.altitude * 1000;
-      const color = Cesium.Color.fromCssColorString(sat.color);
-
-      viewer.entities.add({
-        id: `sat-${sat.id}`,
-        name: sat.name,
-        description: `<table><tr><td>Provider</td><td><b>${sat.provider}</b></td></tr><tr><td>Resolution</td><td><b>${sat.resolution}</b></td></tr><tr><td>Altitude</td><td><b>${sat.altitude.toFixed(0)} km</b></td></tr><tr><td>Velocity</td><td><b>${sat.velocity.toFixed(1)} km/s</b></td></tr><tr><td>Swath</td><td><b>${sat.swathKm} km</b></td></tr></table>`,
-        position: Cesium.Cartesian3.fromDegrees(sat.lng, sat.lat, altMeters),
-        point: {
-          pixelSize: 10,
-          color: color,
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 2,
-        },
-        label: {
-          text: sat.name,
-          font: '12px monospace',
-          fillColor: color,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          pixelOffset: new Cesium.Cartesian2(0, -14),
-        },
-      });
-
-      // Nadir line
-      viewer.entities.add({
-        id: `sat-nadir-${sat.id}`,
-        polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArrayHeights([
-            sat.lng, sat.lat, altMeters, sat.lng, sat.lat, 0,
-          ]),
-          width: 1,
-          material: color.withAlpha(0.15),
-        },
-      });
-
-      // Swath footprint
-      if (showFootprints) {
-        const R = 6371;
-        const halfSwath = sat.swathKm / 2;
-        const dLat = (halfSwath / R) * (180 / Math.PI);
-        const dLng = (halfSwath / (R * Math.cos(sat.lat * Math.PI / 180))) * (180 / Math.PI);
+    // ── Fishing spots ──
+    if (showSpots) {
+      for (const spot of FISHING_SPOTS) {
+        const color = Cesium.Color.fromCssColorString(spot.color);
+        const isSelected = selectedSpot?.id === spot.id;
 
         viewer.entities.add({
-          id: `sat-footprint-${sat.id}`,
+          id: `spot-${spot.id}`,
+          name: spot.name,
+          description: `<div style="font-family:sans-serif"><p>${spot.description}</p><p><b>Species:</b> ${spot.species.join(', ')}</p><p><b>Depth:</b> ${spot.depth}</p><p><b>Type:</b> ${spot.type}</p></div>`,
+          position: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat, 100),
+          point: {
+            pixelSize: isSelected ? 18 : 12,
+            color: isSelected ? Cesium.Color.WHITE : color,
+            outlineColor: color,
+            outlineWidth: isSelected ? 3 : 2,
+            scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 2e6, 0.6),
+          },
+          label: {
+            text: spot.name,
+            font: isSelected ? 'bold 14px sans-serif' : '12px sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -16),
+            scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e6, 0.4),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2e6),
+          },
+        });
+      }
+    }
+
+    // ── Live vessels ──
+    if (showVessels && !showTrajectories) {
+      for (let i = 0; i < vessels.length; i++) {
+        const v = vessels[i];
+        const [lng, lat] = v.geometry.coordinates;
+        const isStopped = v.properties.status === 'stopped';
+        const isSlow = v.properties.status === 'slow';
+
+        viewer.entities.add({
+          id: `vessel-${i}`,
+          name: v.properties.name || `Vessel ${i}`,
+          description: `<div style="font-family:sans-serif"><p><b>Speed:</b> ${v.properties.speed?.toFixed(1) || 0} kts</p><p><b>Status:</b> ${v.properties.status}</p></div>`,
+          position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
+          point: {
+            pixelSize: isStopped ? 7 : isSlow ? 5 : 3,
+            color: isStopped
+              ? Cesium.Color.fromCssColorString('#ef4444')
+              : isSlow
+                ? Cesium.Color.fromCssColorString('#eab308')
+                : Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.3),
+            outlineColor: Cesium.Color.WHITE.withAlpha(isStopped ? 0.5 : 0),
+            outlineWidth: isStopped ? 1 : 0,
+          },
+        });
+      }
+    }
+
+    // ── Trajectory replay vessels ──
+    if (showTrajectories && trajectories.length > 0) {
+      const snap = trajectories[Math.min(trajIndex, trajectories.length - 1)];
+      if (snap) {
+        for (const v of snap.vessels) {
+          const isStopped = v.speed < 1.5;
+          viewer.entities.add({
+            id: `traj-vessel-${v.mmsi}`,
+            name: v.name,
+            position: Cesium.Cartesian3.fromDegrees(v.lng, v.lat, 0),
+            point: {
+              pixelSize: isStopped ? 7 : 5,
+              color: isStopped
+                ? Cesium.Color.fromCssColorString('#ef4444')
+                : Cesium.Color.fromCssColorString('#38bdf8'),
+              outlineColor: Cesium.Color.WHITE.withAlpha(0.5),
+              outlineWidth: 1,
+            },
+          });
+        }
+
+        // Vessel trails (last 10 snapshots)
+        const trailStart = Math.max(0, trajIndex - 10);
+        const trails: Record<number, [number, number][]> = {};
+        for (let i = trailStart; i <= trajIndex; i++) {
+          const s = trajectories[i];
+          if (!s) continue;
+          for (const v of s.vessels) {
+            if (!trails[v.mmsi]) trails[v.mmsi] = [];
+            trails[v.mmsi].push([v.lng, v.lat]);
+          }
+        }
+        for (const [mmsi, coords] of Object.entries(trails)) {
+          if (coords.length < 2) continue;
+          const flat = coords.flatMap(([lng, lat]) => [lng, lat]);
+          viewer.entities.add({
+            id: `traj-trail-${mmsi}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArray(flat),
+              width: 1.5,
+              material: Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.4),
+              clampToGround: true,
+            },
+          });
+        }
+      }
+    }
+
+    // ── Satellite orders (imagery request markers) ──
+    if (showOrders) {
+      for (const order of satOrders) {
+        const tierColor = order.tier === 'up42' ? '#a855f7' : order.tier === 'sentinel' ? '#0ea5e9' : '#ef4444';
+        const color = Cesium.Color.fromCssColorString(tierColor);
+
+        // Pulsing marker at order location
+        viewer.entities.add({
+          id: `order-${order.id}`,
+          name: `📡 ${order.provider || order.tier} Order`,
+          description: `<div style="font-family:sans-serif"><p><b>Resolution:</b> ${order.resolution}m</p><p><b>Status:</b> ${order.status}</p><p><b>Ordered:</b> ${new Date(order.ordered_at).toLocaleString()}</p><p><b>Scene:</b> ${order.scene_id?.substring(0, 20) || '—'}...</p></div>`,
+          position: Cesium.Cartesian3.fromDegrees(order.lng, order.lat, 500),
+          point: {
+            pixelSize: 14,
+            color: Cesium.Color.WHITE,
+            outlineColor: color,
+            outlineWidth: 3,
+          },
+          label: {
+            text: `📡 ${order.resolution}m`,
+            font: '10px monospace',
+            fillColor: color,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -18),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5e5),
+          },
+        });
+
+        // 1km circle showing the imagery area
+        const R = 6371;
+        const halfKm = 0.5;
+        const dLat = (halfKm / R) * (180 / Math.PI);
+        const dLng = (halfKm / (R * Math.cos(order.lat * Math.PI / 180))) * (180 / Math.PI);
+        viewer.entities.add({
+          id: `order-area-${order.id}`,
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArray([
-              sat.lng - dLng, sat.lat - dLat,
-              sat.lng + dLng, sat.lat - dLat,
-              sat.lng + dLng, sat.lat + dLat,
-              sat.lng - dLng, sat.lat + dLat,
-              sat.lng - dLng, sat.lat - dLat,
+              order.lng - dLng, order.lat - dLat,
+              order.lng + dLng, order.lat - dLat,
+              order.lng + dLng, order.lat + dLat,
+              order.lng - dLng, order.lat + dLat,
+              order.lng - dLng, order.lat - dLat,
             ]),
-            width: 1.5,
-            material: color.withAlpha(0.3),
+            width: 2,
+            material: color.withAlpha(0.6),
             clampToGround: true,
           },
         });
       }
     }
 
-    // Orbit paths
-    if (showOrbits) {
+    // ── Satellites ──
+    if (showSatellites && satData) {
+      for (const sat of satData.positions) {
+        const altMeters = sat.altitude * 1000;
+        const color = Cesium.Color.fromCssColorString(sat.color);
+
+        viewer.entities.add({
+          id: `sat-${sat.id}`,
+          name: sat.name,
+          description: `<table><tr><td>Provider</td><td><b>${sat.provider}</b></td></tr><tr><td>Resolution</td><td><b>${sat.resolution}</b></td></tr><tr><td>Altitude</td><td><b>${sat.altitude.toFixed(0)} km</b></td></tr></table>`,
+          position: Cesium.Cartesian3.fromDegrees(sat.lng, sat.lat, altMeters),
+          point: { pixelSize: 8, color: color, outlineColor: Cesium.Color.WHITE, outlineWidth: 1 },
+          label: {
+            text: sat.name,
+            font: '10px monospace',
+            fillColor: color,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 1,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -12),
+          },
+        });
+
+        // Nadir line
+        viewer.entities.add({
+          id: `sat-nadir-${sat.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([sat.lng, sat.lat, altMeters, sat.lng, sat.lat, 0]),
+            width: 1,
+            material: color.withAlpha(0.15),
+          },
+        });
+      }
+
+      // Orbit paths
       for (const orbit of satData.orbits) {
         const color = Cesium.Color.fromCssColorString(orbit.color);
         let prevLng = orbit.positions[0]?.lng || 0;
         let segCoords: number[] = [];
         let segIdx = 0;
-
         for (const p of orbit.positions) {
           if (Math.abs(p.lng - prevLng) > 180) {
             if (segCoords.length >= 6) {
               viewer.entities.add({
                 id: `orbit-${orbit.id}-${segIdx++}`,
-                polyline: {
-                  positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords),
-                  width: 1.5,
-                  material: color.withAlpha(0.4),
-                },
+                polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1, material: color.withAlpha(0.3) },
               });
             }
             segCoords = [];
@@ -268,111 +428,132 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         if (segCoords.length >= 6) {
           viewer.entities.add({
             id: `orbit-${orbit.id}-final`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords),
-              width: 1.5,
-              material: color.withAlpha(0.4),
-            },
+            polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1, material: color.withAlpha(0.3) },
           });
         }
       }
     }
+  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, selectedSpot]);
 
-    // Vessels
-    if (showVessels) {
-      for (let i = 0; i < vessels.length; i++) {
-        const v = vessels[i];
-        const [lng, lat] = v.geometry.coordinates;
-        const isStopped = v.properties.status === 'stopped';
-
-        viewer.entities.add({
-          id: `vessel-${i}`,
-          name: v.properties.name,
-          position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
-          point: {
-            pixelSize: isStopped ? 6 : 4,
-            color: isStopped
-              ? Cesium.Color.fromCssColorString('#ef4444')
-              : Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.4),
-          },
-        });
-      }
-    }
-  }, [satData, vessels, loaded, showOrbits, showVessels, showFootprints]);
-
+  // ── Render ──────────────────────────────────────────────────────────
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
       {!loaded && !error && (
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#050a15', color: '#00d4ff', fontSize: 16, fontFamily: 'monospace',
-        }}>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050a15', color: '#00d4ff', fontSize: 16, fontFamily: 'monospace' }}>
           Loading 3D Globe...
         </div>
       )}
-
       {error && (
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: '#050a15', color: '#ef4444', fontSize: 14, fontFamily: 'monospace',
-        }}>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050a15', color: '#ef4444', fontSize: 14, fontFamily: 'monospace' }}>
           Error: {error}
         </div>
       )}
 
-      {/* Layer controls */}
-      <div style={{
-        position: 'absolute', top: 10, left: 10, zIndex: 10,
-        background: 'rgba(10, 15, 26, 0.9)', backdropFilter: 'blur(8px)',
-        border: '1px solid #1e2a42', borderRadius: 8, padding: '10px 14px', fontSize: 11,
-      }}>
-        <div style={{ color: '#e2e8f0', fontWeight: 700, marginBottom: 8, fontSize: 12 }}>🛰 3D Satellite View</div>
+      {/* ── Map Controls (right side) ── */}
+      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* Zoom */}
+        <button onClick={() => { const C = (window as any).Cesium; viewerRef.current?.camera.zoomIn(viewerRef.current.camera.positionCartographic.height * 0.3); }}
+          style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(10,15,26,0.9)', border: '1px solid #1e2a42', color: '#e2e8f0', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+        <button onClick={() => { viewerRef.current?.camera.zoomOut(viewerRef.current.camera.positionCartographic.height * 0.5); }}
+          style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(10,15,26,0.9)', border: '1px solid #1e2a42', color: '#e2e8f0', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
+        {/* North reset */}
+        <button onClick={() => { const C = (window as any).Cesium; const cam = viewerRef.current?.camera; if (cam) { const pos = cam.positionCartographic; cam.flyTo({ destination: C.Cartesian3.fromRadians(pos.longitude, pos.latitude, pos.height), orientation: { heading: 0, pitch: cam.pitch, roll: 0 }, duration: 1 }); } }}
+          style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(10,15,26,0.9)', border: '1px solid #1e2a42', color: '#e2e8f0', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>N</button>
+        {/* Reset view */}
+        <button onClick={resetView}
+          style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(10,15,26,0.9)', border: '1px solid #1e2a42', color: '#667788', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⌂</button>
+      </div>
+
+      {/* ── Layer Panel (left side) ── */}
+      <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10, background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)', border: '1px solid #1e2a42', borderRadius: 10, padding: '12px 14px', fontSize: 11, maxWidth: 220 }}>
+        <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Fishing Intelligence</div>
+
         {[
-          { key: 'orbits', label: 'Orbit Paths', state: showOrbits, set: setShowOrbits, color: '#0ea5e9' },
-          { key: 'footprints', label: 'Swath Footprints', state: showFootprints, set: setShowFootprints, color: '#a855f7' },
-          { key: 'vessels', label: 'Fishing Vessels', state: showVessels, set: setShowVessels, color: '#38bdf8' },
+          { key: 'spots', label: 'Fishing Spots', state: showSpots, set: setShowSpots, color: '#f97316', count: FISHING_SPOTS.length },
+          { key: 'vessels', label: 'Live Vessels', state: showVessels, set: setShowVessels, color: '#38bdf8', count: vessels.length },
+          { key: 'orders', label: 'Satellite Orders', state: showOrders, set: setShowOrders, color: '#a855f7', count: satOrders.length },
+          { key: 'trajectories', label: '48h Replay', state: showTrajectories, set: setShowTrajectories, color: '#00d4ff' },
+          { key: 'satellites', label: 'Satellite Tracker', state: showSatellites, set: setShowSatellites, color: '#667788', count: satData?.positions.length },
         ].map(l => (
-          <div key={l.key} onClick={() => l.set(!l.state)} style={{
-            display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
-            cursor: 'pointer', opacity: l.state ? 1 : 0.35,
-          }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: l.state ? l.color : '#333' }} />
-            <span style={{ color: '#cbd5e1' }}>{l.label}</span>
+          <div key={l.key} onClick={() => l.set(!l.state)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', opacity: l.state ? 1 : 0.35 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: l.state ? l.color : '#333', border: `1px solid ${l.color}44`, flexShrink: 0 }} />
+            <span style={{ color: '#e2e8f0', flex: 1 }}>{l.label}</span>
+            {'count' in l && l.count != null && <span style={{ color: '#667788', fontSize: 9, fontFamily: 'monospace' }}>{l.count}</span>}
           </div>
         ))}
-        {satData && (
-          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #1e2a42', color: '#667788', fontSize: 9 }}>
-            {satData.positions.length} satellites · {vessels.length} vessels
+
+        {/* Satellite orders indicator */}
+        {satOrders.length > 0 && showOrders && (
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #1e2a42' }}>
+            <div style={{ color: '#a855f7', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>
+              📡 {satOrders.length} Imagery Order{satOrders.length > 1 ? 's' : ''}
+            </div>
+            {satOrders.slice(0, 3).map(o => (
+              <div key={o.id} style={{ fontSize: 9, color: '#8899aa', marginBottom: 2 }}>
+                {o.provider || o.tier} · {o.resolution}m · {o.status}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Camera presets */}
-      <div style={{ position: 'absolute', bottom: 10, left: 10, zIndex: 10, display: 'flex', gap: 4 }}>
-        {[
-          { label: 'SoCal', lat: 32.7, lng: -117.5, alt: 800000, pitch: -60 },
-          { label: 'Baja', lat: 30.5, lng: -117.0, alt: 600000, pitch: -50 },
-          { label: 'Full Coverage', lat: 31.5, lng: -117.5, alt: 1500000, pitch: -60 },
-          { label: 'Space View', lat: 31.5, lng: -117.5, alt: 5000000, pitch: -90 },
-        ].map(p => (
-          <button key={p.label} onClick={() => {
-            const Cesium = (window as any).Cesium;
-            viewerRef.current?.camera.flyTo({
-              destination: Cesium.Cartesian3.fromDegrees(p.lng, p.lat, p.alt),
-              orientation: { heading: 0, pitch: Cesium.Math.toRadians(p.pitch), roll: 0 },
-              duration: 2,
-            });
-          }} style={{
-            padding: '5px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
-            background: 'rgba(10, 15, 26, 0.9)', color: '#8899aa',
-            border: '1px solid #1e2a42', cursor: 'pointer',
-          }}>
-            {p.label}
-          </button>
-        ))}
-      </div>
+      {/* ── Fishing Spots Quick Access (bottom) ── */}
+      {showSpots && (
+        <div style={{ position: 'absolute', bottom: showTrajectories ? 70 : 10, left: 10, right: showTrajectories ? 10 : 'auto', zIndex: 10, display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: showTrajectories ? '100%' : 600 }}>
+          {FISHING_SPOTS.map(spot => (
+            <button key={spot.id} onClick={() => flyToSpot(spot)} style={{
+              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+              background: selectedSpot?.id === spot.id ? spot.color + '44' : 'rgba(10,15,26,0.85)',
+              color: selectedSpot?.id === spot.id ? '#fff' : '#8899aa',
+              border: `1px solid ${selectedSpot?.id === spot.id ? spot.color : '#1e2a42'}`,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>
+              {spot.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Time Scrubber (for trajectory replay) ── */}
+      {showTrajectories && trajectories.length > 0 && (
+        <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, zIndex: 10, background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)', border: '1px solid #1e2a42', borderRadius: 8, padding: '8px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => setTrajPlaying(p => !p)} style={{ background: 'none', border: 'none', color: '#00d4ff', fontSize: 16, cursor: 'pointer', padding: 0 }}>
+              {trajPlaying ? '⏸' : '▶'}
+            </button>
+            <input type="range" min={0} max={trajectories.length - 1} value={trajIndex} onChange={e => setTrajIndex(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#00d4ff' }} />
+            <span style={{ color: '#667788', fontSize: 10, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+              {trajectories[trajIndex] ? new Date(trajectories[trajIndex].timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#4a5568', marginTop: 2 }}>
+            <span>48h ago</span>
+            <span>{trajectories[trajIndex]?.vessels.length || 0} vessels</span>
+            <span>Now</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Selected Spot Detail ── */}
+      {selectedSpot && (
+        <div style={{ position: 'absolute', top: 10, right: 56, zIndex: 10, background: 'rgba(10,15,26,0.95)', backdropFilter: 'blur(8px)', border: `1px solid ${selectedSpot.color}44`, borderRadius: 10, padding: 14, maxWidth: 260 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 14 }}>{selectedSpot.name}</span>
+            <button onClick={() => setSelectedSpot(null)} style={{ background: 'none', border: 'none', color: '#667788', cursor: 'pointer', fontSize: 14 }}>✕</button>
+          </div>
+          <p style={{ color: '#8899aa', fontSize: 11, margin: '0 0 8px', lineHeight: 1.5 }}>{selectedSpot.description}</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+            {selectedSpot.species.map(s => (
+              <span key={s} style={{ padding: '2px 8px', borderRadius: 4, fontSize: 9, background: selectedSpot.color + '22', color: selectedSpot.color, fontWeight: 600 }}>{s}</span>
+            ))}
+          </div>
+          <div style={{ fontSize: 10, color: '#667788' }}>
+            Depth: {selectedSpot.depth} · Type: {selectedSpot.type}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
