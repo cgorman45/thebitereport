@@ -31,6 +31,15 @@ interface CesiumGlobeProps {
   cesiumIonToken?: string;
 }
 
+// Generate vessel arrow SVG as data URI (MarineTraffic style)
+function vesselArrowSvg(color: string, size: number = 20): string {
+  // Pointed triangle/arrow shape like MarineTraffic
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 20 20">
+    <polygon points="10,1 17,17 10,13 3,17" fill="${color}" stroke="rgba(0,0,0,0.5)" stroke-width="1"/>
+  </svg>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
 // Load CesiumJS from CDN
 function loadCesiumFromCDN(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -343,16 +352,22 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           color = Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.5);
         }
 
+        // Use arrow billboards rotated to heading (MarineTraffic style)
+        const heading = v.properties.heading || v.properties.course || 0;
+        const arrowColor = isParked ? '#4a5568' : isStopped ? '#f97316' : isSlow ? '#eab308' : '#38bdf8';
+
         viewer.entities.add({
           id: `vessel-${i}`,
           name: v.properties.name || `Vessel ${i}`,
           description: `<div style="font-family:sans-serif"><p><b>Speed:</b> ${v.properties.speed?.toFixed(1) || 0} kts</p><p><b>Status:</b> ${v.properties.status}</p></div>`,
           position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
-          point: {
-            pixelSize,
-            color,
-            outlineColor: Cesium.Color.WHITE.withAlpha(outlineWidth > 0 ? 0.4 : 0),
-            outlineWidth,
+          billboard: {
+            image: vesselArrowSvg(arrowColor, isParked ? 10 : 18),
+            width: isParked ? 8 : 16,
+            height: isParked ? 8 : 16,
+            rotation: -Cesium.Math.toRadians(heading),
+            alignedAxis: Cesium.Cartesian3.UNIT_Z,
+            scaleByDistance: new Cesium.NearFarScalar(1e3, 1.5, 5e5, 0.4),
           },
         });
       }
@@ -397,16 +412,21 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             color = Cesium.Color.fromCssColorString('#38bdf8');
           }
 
+          const arrowColor = isParked ? '#4a5568' : isFishing ? '#eab308' : isStopped ? '#f97316' : '#38bdf8';
+          const hdg = v.heading || 0;
+
           viewer.entities.add({
             id: `traj-vessel-${v.mmsi}`,
             name: v.name,
             description: `<div><b>Speed:</b> ${v.speed.toFixed(1)} kts</div>`,
             position: Cesium.Cartesian3.fromDegrees(v.lng, v.lat, 0),
-            point: {
-              pixelSize,
-              color,
-              outlineColor: Cesium.Color.WHITE.withAlpha(isParked ? 0 : 0.4),
-              outlineWidth: isParked ? 0 : 1,
+            billboard: {
+              image: vesselArrowSvg(arrowColor, isParked ? 10 : 18),
+              width: isParked ? 8 : 16,
+              height: isParked ? 8 : 16,
+              rotation: -Cesium.Math.toRadians(hdg),
+              alignedAxis: Cesium.Cartesian3.UNIT_Z,
+              scaleByDistance: new Cesium.NearFarScalar(1e3, 1.5, 5e5, 0.4),
             },
           });
         }
