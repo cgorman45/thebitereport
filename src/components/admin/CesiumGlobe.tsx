@@ -53,6 +53,7 @@ export default function CesiumGlobe({ cesiumIonToken, googleApiKey }: CesiumGlob
     let cancelled = false;
 
     (async () => {
+      // Use pre-built Cesium to avoid octal escape issues in source
       const Cesium = await import('cesium');
 
       if (cancelled) return;
@@ -75,16 +76,6 @@ export default function CesiumGlobe({ cesiumIonToken, googleApiKey }: CesiumGlob
         vrButton: false,
         navigationHelpButton: false,
         infoBox: true,
-        skyBox: new Cesium.SkyBox({
-          sources: {
-            positiveX: '/Cesium/Assets/Textures/SkyBox/tycho2t3_80_px.jpg',
-            negativeX: '/Cesium/Assets/Textures/SkyBox/tycho2t3_80_mx.jpg',
-            positiveY: '/Cesium/Assets/Textures/SkyBox/tycho2t3_80_py.jpg',
-            negativeY: '/Cesium/Assets/Textures/SkyBox/tycho2t3_80_my.jpg',
-            positiveZ: '/Cesium/Assets/Textures/SkyBox/tycho2t3_80_pz.jpg',
-            negativeZ: '/Cesium/Assets/Textures/SkyBox/tycho2t3_80_mz.jpg',
-          },
-        }),
         skyAtmosphere: new Cesium.SkyAtmosphere(),
       });
 

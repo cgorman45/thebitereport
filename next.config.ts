@@ -4,7 +4,7 @@ import path from 'path';
 import CopyWebpackPlugin from 'copy-webpack-plugin';
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['ws'],
+  serverExternalPackages: ['ws', 'cesium'],
   webpack: (config, { isServer, webpack }) => {
     // Fix react-map-gl/mapbox subpath import for production builds
     config.resolve = config.resolve || {};
@@ -25,6 +25,10 @@ const nextConfig: NextConfig = {
           ],
         }),
       );
+
+      // CesiumJS compatibility
+      config.module = config.module || {};
+      config.module.unknownContextCritical = false;
     }
 
     config.plugins.push(
