@@ -1,102 +1,70 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { searchScenes, orderScene } from '@/lib/ocean-data/planet';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+type Tier = 'sentinel' | 'planetscope' | 'up42';
+
 /**
  * POST /api/demo/order-satellite
  *
- * Searches for and orders PlanetScope 3m imagery at a kelp signal location.
- * Body: { lat, lng, boat_stop_id, score }
+ * Searches for and orders satellite imagery at a kelp signal location.
+ * Body: { lat, lng, boat_stop_id, score, tier? }
  *
- * Flow:
- * 1. Search Planet for available PlanetScope scenes at the location
- * 2. Pick the most recent clear scene
- * 3. Order a clipped download (~4km x 4km around the point)
- * 4. Update boat_stops table with satellite_requested=true and scene_id
- * 5. Return order status
+ * Tiers:
+ *   - "sentinel": 10m Sentinel-2 via Sentinel Hub (free)
+ *   - "planetscope" (default): 3m PlanetScope via Planet Labs
+ *   - "up42": 50cm Pléiades via UP42
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { lat, lng, boat_stop_id, score } = body as {
+    const { lat, lng, boat_stop_id, score, tier = 'planetscope' } = body as {
       lat: number;
       lng: number;
       boat_stop_id?: string;
       score?: number;
+      tier?: Tier;
     };
 
     if (!lat || !lng) {
       return NextResponse.json({ error: 'lat and lng required' }, { status: 400 });
     }
 
-    if (!process.env.PLANET_API_KEY) {
-      return NextResponse.json({ error: 'PLANET_API_KEY not configured' }, { status: 500 });
+    let result;
+
+    switch (tier) {
+      case 'sentinel':
+        result = await handleSentinel(lat, lng, score);
+        break;
+      case 'up42':
+        result = await handleUP42(lat, lng, score);
+        break;
+      case 'planetscope':
+      default:
+        result = await handlePlanetScope(lat, lng, score);
+        break;
     }
 
-    // 1. Search for available scenes
-    const scenes = await searchScenes(lat, lng, 14, 0.2, 5);
-
-    if (scenes.length === 0) {
-      return NextResponse.json({
-        success: false,
-        message: 'No clear PlanetScope scenes found in the last 14 days for this location',
-        lat,
-        lng,
-        scenes_found: 0,
-      });
+    // Update boat_stops if ID provided
+    if (boat_stop_id && result.success) {
+      try {
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        );
+        await supabase
+          .from('boat_stops')
+          .update({
+            satellite_requested: true,
+            satellite_scene_id: result.scene?.id || tier,
+          })
+          .eq('id', boat_stop_id);
+      } catch { /* non-critical */ }
     }
 
-    // 2. Pick the best scene (most recent, least cloud)
-    const bestScene = scenes[0];
-
-    // 3. Try to order — may fail on trial accounts
-    let order = null;
-    try {
-      const orderName = `kelp-signal-${score || 0}-${lat.toFixed(3)}-${Math.abs(lng).toFixed(3)}`;
-      order = await orderScene(bestScene.id, lat, lng, orderName);
-    } catch (orderErr) {
-      // Trial accounts can't order — that's OK, we still show the search results
-      console.log('[order-satellite] Order failed (trial account?):', orderErr instanceof Error ? orderErr.message : String(orderErr));
-    }
-
-    // 4. Update boat_stops if ID provided
-    if (boat_stop_id) {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      );
-
-      await supabase
-        .from('boat_stops')
-        .update({
-          satellite_requested: true,
-          satellite_scene_id: bestScene.id,
-        })
-        .eq('id', boat_stop_id);
-    }
-
-    return NextResponse.json({
-      success: true,
-      scene: {
-        id: bestScene.id,
-        acquired: bestScene.acquired,
-        cloud_cover: bestScene.cloud_cover,
-        resolution: bestScene.pixel_resolution,
-        satellite: bestScene.satellite_id,
-      },
-      order: order ? {
-        id: order.orderId,
-        status: order.status,
-      } : {
-        id: 'trial-limited',
-        status: 'Scene identified — upgrade Planet account to download',
-      },
-      location: { lat, lng },
-      total_scenes_available: scenes.length,
-    });
+    return NextResponse.json({ ...result, location: { lat, lng } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[order-satellite]', msg);
@@ -104,10 +72,173 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// — Sentinel Hub (10m, free) —
+async function handleSentinel(lat: number, lng: number, score?: number) {
+  if (!process.env.SENTINEL_HUB_CLIENT_ID) {
+    return {
+      success: false,
+      tier: 'sentinel',
+      tier_label: 'Sentinel-2 10m',
+      message: 'SENTINEL_HUB_CLIENT_ID not configured. Set up at https://shapps.dataspace.copernicus.eu/dashboard/',
+    };
+  }
+
+  try {
+    const { searchSentinelScenes } = await import('@/lib/ocean-data/sentinel-hub');
+    const scenes = await searchSentinelScenes(lat, lng, 14, 30, 5);
+
+    if (scenes.length === 0) {
+      return {
+        success: false,
+        tier: 'sentinel',
+        tier_label: 'Sentinel-2 10m',
+        message: 'No clear Sentinel-2 scenes found in the last 14 days',
+        scenes_found: 0,
+      };
+    }
+
+    const best = scenes[0];
+    return {
+      success: true,
+      tier: 'sentinel',
+      tier_label: 'Sentinel-2 10m (free)',
+      scene: {
+        id: best.id,
+        acquired: best.acquired,
+        cloud_cover: best.cloud_cover,
+        resolution: 10,
+        satellite: 'Sentinel-2',
+      },
+      order: {
+        id: 'sentinel-free',
+        status: 'Scene available — free tier, no order needed',
+      },
+      total_scenes_available: scenes.length,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      tier: 'sentinel',
+      tier_label: 'Sentinel-2 10m',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+// — PlanetScope (3m) —
+async function handlePlanetScope(lat: number, lng: number, score?: number) {
+  if (!process.env.PLANET_API_KEY) {
+    return {
+      success: false,
+      tier: 'planetscope',
+      tier_label: 'PlanetScope 3m',
+      message: 'PLANET_API_KEY not configured',
+    };
+  }
+
+  const { searchScenes, orderScene } = await import('@/lib/ocean-data/planet');
+  const scenes = await searchScenes(lat, lng, 30, 0.3, 5, 'PSScene');
+
+  if (scenes.length === 0) {
+    return {
+      success: false,
+      tier: 'planetscope',
+      tier_label: 'PlanetScope 3m',
+      message: 'No clear PlanetScope scenes found in the last 30 days',
+      scenes_found: 0,
+    };
+  }
+
+  const best = scenes[0];
+  let order = null;
+  try {
+    const orderName = `kelp-ps-${score || 0}-${lat.toFixed(3)}-${Math.abs(lng).toFixed(3)}`;
+    order = await orderScene(best.id, lat, lng, orderName, 'PSScene');
+  } catch (orderErr) {
+    console.log('[order-satellite] Planet order failed:', orderErr instanceof Error ? orderErr.message : String(orderErr));
+  }
+
+  return {
+    success: true,
+    tier: 'planetscope',
+    tier_label: 'PlanetScope 3m',
+    scene: {
+      id: best.id,
+      acquired: best.acquired,
+      cloud_cover: best.cloud_cover,
+      resolution: best.pixel_resolution || 3,
+      satellite: best.satellite_id,
+    },
+    order: order
+      ? { id: order.orderId, status: order.status }
+      : { id: 'trial-limited', status: 'Scene identified — upgrade Planet account to download' },
+    total_scenes_available: scenes.length,
+  };
+}
+
+// — UP42 Pléiades (50cm) —
+async function handleUP42(lat: number, lng: number, score?: number) {
+  if (!process.env.UP42_EMAIL) {
+    return {
+      success: false,
+      tier: 'up42',
+      tier_label: 'Pléiades 50cm (UP42)',
+      message: 'UP42_EMAIL not configured. Sign up at https://console.up42.com',
+    };
+  }
+
+  try {
+    const { searchUP42Scenes, orderUP42Scene } = await import('@/lib/ocean-data/up42');
+    const scenes = await searchUP42Scenes(lat, lng, 90, 30, 5);
+
+    if (scenes.length === 0) {
+      return {
+        success: false,
+        tier: 'up42',
+        tier_label: 'Pléiades 50cm (UP42)',
+        message: 'No Pléiades scenes found in the last 90 days for this location',
+        scenes_found: 0,
+      };
+    }
+
+    const best = scenes[0];
+    let order = null;
+    try {
+      const orderName = `kelp-up42-${score || 0}-${lat.toFixed(3)}-${Math.abs(lng).toFixed(3)}`;
+      order = await orderUP42Scene(best.id, lat, lng, orderName);
+    } catch (orderErr) {
+      console.log('[order-satellite] UP42 order failed:', orderErr instanceof Error ? orderErr.message : String(orderErr));
+    }
+
+    return {
+      success: true,
+      tier: 'up42',
+      tier_label: 'Pléiades 50cm (UP42)',
+      scene: {
+        id: best.id,
+        acquired: best.acquired,
+        cloud_cover: best.cloud_cover,
+        resolution: 0.5,
+        satellite: best.constellation,
+      },
+      order: order
+        ? { id: order.orderId, status: order.status, credits: order.credits }
+        : { id: 'search-only', status: 'Scene found — add UP42 credits to order' },
+      total_scenes_available: scenes.length,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      tier: 'up42',
+      tier_label: 'Pléiades 50cm (UP42)',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 /**
  * GET /api/demo/order-satellite?order_id=xxx
- *
- * Check status of an existing order.
+ * Check status of an existing Planet order.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

@@ -66,17 +66,21 @@ export async function GET() {
         },
       });
 
-      // Drift endpoint marker
-      const lastPoint = predictedPath[predictedPath.length - 1];
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [lastPoint.lng, lastPoint.lat] },
-        properties: {
-          id: paddy.id,
-          type: 'drift-endpoint',
-          hours_ahead: (lastPoint as any).hours_ahead || 48,
-        },
-      });
+      // Time marker points along drift path (24h, 48h)
+      for (const pt of predictedPath as any[]) {
+        if (pt.hours_ahead === 24 || pt.hours_ahead === 48) {
+          features.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [pt.lng, pt.lat] },
+            properties: {
+              id: paddy.id,
+              type: 'drift-time-marker',
+              hours_ahead: pt.hours_ahead,
+              label: `${pt.hours_ahead}h`,
+            },
+          });
+        }
+      }
     }
 
     // Historical drift path (confirmed positions)
