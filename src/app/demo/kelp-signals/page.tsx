@@ -353,6 +353,16 @@ function KelpSignalsDashboard() {
               🎯 God&apos;s Eye View
             </button>
             <Link
+              href="/admin/satellite-view"
+              style={{
+                padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: '#0ea5e922', color: '#0ea5e9', textDecoration: 'none',
+                border: '1px solid #0ea5e933',
+              }}
+            >
+              🛰 Satellite Tracker
+            </Link>
+            <Link
               href="/admin/satellite-review"
               style={{
                 padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
