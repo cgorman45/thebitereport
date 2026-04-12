@@ -3,6 +3,7 @@
  *
  * Always-on Node.js server that maintains a WebSocket connection to aisstream.io
  * and exposes vessel positions via a REST endpoint.
+ * Also archives vessel trajectories to Supabase every 5 minutes for 4D replay.
  *
  * Deploy to Railway ($5/mo) or Render.
  *
@@ -10,6 +11,8 @@
  *   AIS_API_KEY - aisstream.io API key (required)
  *   PORT - server port (default 3001, Railway sets this automatically)
  *   ALLOWED_ORIGINS - comma-separated allowed CORS origins (default: *)
+ *   SUPABASE_URL - Supabase project URL (optional, for trajectory archiving)
+ *   SUPABASE_SERVICE_KEY - Supabase service role key (optional)
  */
 
 import express from 'express';
@@ -126,6 +129,55 @@ setInterval(() => {
     if (pos.timestamp < cutoff) positions.delete(mmsi);
   }
 }, 30000);
+
+// ---------- Trajectory Archiving ----------
+// Archive current vessel positions to Supabase every 5 minutes for 4D replay
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+async function archivePositions() {
+  if (!SUPABASE_URL || !SUPABASE_KEY || positions.size === 0) return;
+
+  const now = new Date().toISOString();
+  const rows = [];
+  for (const [, pos] of positions) {
+    rows.push({
+      mmsi: pos.mmsi,
+      boat_name: pos.name,
+      lat: pos.lat,
+      lng: pos.lng,
+      speed: pos.sog,
+      heading: pos.heading,
+      cog: pos.cog,
+      timestamp: now,
+    });
+  }
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/vessel_trajectories`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(rows),
+    });
+    if (res.ok) {
+      console.log(`[Archive] Saved ${rows.length} vessel positions`);
+    } else {
+      console.log(`[Archive] Failed: ${res.status}`);
+    }
+  } catch (err) {
+    console.log(`[Archive] Error: ${err.message}`);
+  }
+}
+
+// Archive every 5 minutes
+setInterval(archivePositions, 5 * 60 * 1000);
+// First archive after 30 seconds of data collection
+setTimeout(archivePositions, 30000);
 
 // ---------- Express Server ----------
 const app = express();
