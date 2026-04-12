@@ -118,7 +118,7 @@ export async function searchUP42Scenes(
   const now = new Date();
   const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
 
-  const delta = 0.02; // ~2km search area
+  const delta = 0.1; // ~10km search area — Pléiades scenes are large
   const bbox = [lng - delta, lat - delta, lng + delta, lat + delta];
 
   const searchBody = {
