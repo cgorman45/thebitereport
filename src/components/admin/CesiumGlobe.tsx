@@ -105,10 +105,14 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         } catch { /* ignore */ }
       }
 
-      // Camera: SoCal overview
+      // Camera: San Diego offshore — looking out over the open ocean
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(-117.5, 31.5, 1200000),
-        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
+        destination: Cesium.Cartesian3.fromDegrees(-117.35, 32.65, 80000),
+        orientation: {
+          heading: Cesium.Math.toRadians(250), // Looking west-southwest toward open ocean
+          pitch: Cesium.Math.toRadians(-35),
+          roll: 0,
+        },
         duration: 0,
       });
 
@@ -185,14 +189,18 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     }
   }, []);
 
-  // Reset view
+  // Reset view — back to San Diego offshore
   const resetView = useCallback(() => {
     const Cesium = (window as any).Cesium;
     if (!viewerRef.current || !Cesium) return;
     setSelectedSpot(null);
     viewerRef.current.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(-117.5, 31.5, 1200000),
-      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
+      destination: Cesium.Cartesian3.fromDegrees(-117.35, 32.65, 80000),
+      orientation: {
+        heading: Cesium.Math.toRadians(250),
+        pitch: Cesium.Math.toRadians(-35),
+        roll: 0,
+      },
       duration: 2,
     });
   }, []);
