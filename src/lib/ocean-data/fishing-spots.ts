@@ -13,7 +13,7 @@ export interface FishingSpot {
   description: string;
   species: string[];
   depth: string;
-  type: 'reef' | 'bank' | 'island' | 'canyon' | 'kelp' | 'open';
+  type: 'reef' | 'bank' | 'island' | 'canyon' | 'kelp' | 'open' | 'knoll';
   color: string;
   /** Custom geofence polygon following bathymetric contours [lng, lat][] */
   polygon?: [number, number][];
@@ -262,6 +262,24 @@ export const FISHING_SPOTS: FishingSpot[] = [
       [-117.90, 32.210], [-117.93, 32.190], [-117.97, 32.180],
       [-118.02, 32.180], [-118.06, 32.190], [-118.09, 32.210],
       [-118.10, 32.240], [-118.10, 32.270], [-118.08, 32.300],
+    ],
+  },
+  {
+    id: 'san-salvador-knoll',
+    name: 'San Salvador Knoll',
+    // Exact: 32°18'03.1"N 117°53'27.5"W
+    lat: 32.300861, lng: -117.890972,
+    zoom: 35000, radiusKm: 5,
+    description: 'Underwater knoll between East Butterfly and the coast. Holds yellowtail and white seabass.',
+    species: ['Yellowtail', 'White Seabass', 'Calico Bass', 'Bonito'],
+    depth: '200-600ft',
+    type: 'knoll',
+    color: '#eab308',
+    polygon: [
+      [-117.93, 32.330], [-117.89, 32.340], [-117.85, 32.330],
+      [-117.83, 32.310], [-117.83, 32.290], [-117.85, 32.270],
+      [-117.89, 32.265], [-117.93, 32.270], [-117.94, 32.290],
+      [-117.94, 32.315], [-117.93, 32.330],
     ],
   },
   {
