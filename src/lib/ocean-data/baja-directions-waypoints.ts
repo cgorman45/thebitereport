@@ -41,7 +41,7 @@ const SD_OFFSHORE: Waypoint[] = [
   { id: 14, name: '267 / Santa Tomas Knoll', lat: 32 + 17.50/60, lng: -(117 + 10.50/60), chart: 'sd-offshore', type: 'knoll' },
   { id: 15, name: 'East Butterfly (267)', lat: 32 + 10/60, lng: -(117 + 54/60), chart: 'sd-offshore', type: 'spot' },
   { id: 16, name: 'West Butterfly (162)', lat: 32 + 17/60, lng: -(118 + 33.30/60), chart: 'sd-offshore', type: 'spot' },
-  { id: 17, name: 'San Salvador Knoll', lat: 32 + 7/60, lng: -(117 + 51.50/60), chart: 'sd-offshore', type: 'knoll' },
+  { id: 17, name: 'San Salvador Knoll', lat: 32.300861, lng: -117.890972, chart: 'sd-offshore', type: 'knoll' },
   { id: 18, name: '371', lat: 32 + 15/60, lng: -(117 + 15/60), chart: 'sd-offshore', type: 'spot' },
   { id: 19, name: '425', lat: 32 + 7/60, lng: -(117 + 37.38/60), chart: 'sd-offshore', type: 'spot' },
   { id: 20, name: '101 / The Rockpile', lat: 32 + 4/60, lng: -(117 + 48.92/60), chart: 'sd-offshore', type: 'reef' },
