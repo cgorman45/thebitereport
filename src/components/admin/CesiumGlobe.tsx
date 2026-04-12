@@ -567,9 +567,9 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           });
         }
 
-        // Vessel trails — show where boats have been
-        // Red trail for recent/live, yellow for historical
-        const trailLength = 15; // Show last 15 snapshots (~2.5hrs at 10min intervals)
+        // Long dissipating trails — show full history up to current index
+        // Thin white/cyan lines that fade over time, like the WorldView/CaptureWorld style
+        const trailLength = Math.min(trajIndex, 72); // Up to 72 snapshots (~12hrs at 10min)
         const trailStart = Math.max(0, trajIndex - trailLength);
         const trails: Record<number, { coords: [number, number][]; wasMoving: boolean }> = {};
 
@@ -586,23 +586,57 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         for (const [mmsi, trail] of Object.entries(trails)) {
           if (trail.coords.length < 2 || !trail.wasMoving) continue;
 
-          // Dissipating tail: draw multiple segments with decreasing opacity
-          const trailColor = isNearLive ? '#ef4444' : '#eab308';
-          const segments = trail.coords.length - 1;
+          // Single polyline per vessel for the full trail (performance)
+          // Opacity based on how recent — older trails are more transparent
+          const age = trail.coords.length;
+          const maxOpacity = 0.7;
+          const minOpacity = 0.05;
 
-          for (let s = 0; s < segments; s++) {
-            const opacity = 0.1 + (s / segments) * 0.6; // Fade from 0.1 (old) to 0.7 (recent)
-            const width = 1 + (s / segments) * 2; // Thinner tail, thicker near head
+          // Split into 3 segments: old (faint), mid, recent (bright)
+          const segCount = trail.coords.length;
+          const third = Math.max(2, Math.floor(segCount / 3));
 
+          // Old segment — very faint
+          if (segCount > 4) {
+            const oldCoords = trail.coords.slice(0, third);
+            if (oldCoords.length >= 2) {
+              viewer.entities.add({
+                id: `traj-trail-${mmsi}-old`,
+                polyline: {
+                  positions: Cesium.Cartesian3.fromDegreesArray(oldCoords.flatMap(c => c)),
+                  width: 1,
+                  material: Cesium.Color.fromCssColorString('#88ccff').withAlpha(0.08),
+                  clampToGround: true,
+                },
+              });
+            }
+          }
+
+          // Mid segment — moderate
+          if (segCount > 4) {
+            const midCoords = trail.coords.slice(Math.max(0, third - 1), third * 2);
+            if (midCoords.length >= 2) {
+              viewer.entities.add({
+                id: `traj-trail-${mmsi}-mid`,
+                polyline: {
+                  positions: Cesium.Cartesian3.fromDegreesArray(midCoords.flatMap(c => c)),
+                  width: 1.5,
+                  material: Cesium.Color.fromCssColorString('#88ccff').withAlpha(0.2),
+                  clampToGround: true,
+                },
+              });
+            }
+          }
+
+          // Recent segment — bright
+          const recentCoords = trail.coords.slice(Math.max(0, segCount - third - 1));
+          if (recentCoords.length >= 2) {
             viewer.entities.add({
-              id: `traj-trail-${mmsi}-${s}`,
+              id: `traj-trail-${mmsi}-new`,
               polyline: {
-                positions: Cesium.Cartesian3.fromDegreesArray([
-                  trail.coords[s][0], trail.coords[s][1],
-                  trail.coords[s + 1][0], trail.coords[s + 1][1],
-                ]),
-                width,
-                material: Cesium.Color.fromCssColorString(trailColor).withAlpha(opacity),
+                positions: Cesium.Cartesian3.fromDegreesArray(recentCoords.flatMap(c => c)),
+                width: 2,
+                material: Cesium.Color.fromCssColorString(isNearLive ? '#ffffff' : '#88ddff').withAlpha(0.5),
                 clampToGround: true,
               },
             });
