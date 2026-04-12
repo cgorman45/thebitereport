@@ -38,7 +38,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-[#0a0f1a] text-[#e2e8f0]">
         <AuthProvider>
           {children}
-          <GlobalSideTabs />
+          {/* <GlobalSideTabs /> */}
         </AuthProvider>
         <Analytics />
       </body>
