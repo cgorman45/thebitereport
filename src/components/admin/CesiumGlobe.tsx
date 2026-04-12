@@ -66,12 +66,21 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [selectedSpot, setSelectedSpot] = useState<FishingSpot | null>(null);
 
   // Layers
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [showWaypoints, setShowWaypoints] = useState(false); // Off by default — lots of points
   const [showSatellites, setShowSatellites] = useState(false); // Off by default to reduce clutter
   const [showVessels, setShowVessels] = useState(true);
   const [showSpots, setShowSpots] = useState(true);
   const [showOrders, setShowOrders] = useState(true);
   const [showTrajectories, setShowTrajectories] = useState(true); // On by default — show boat history
+
+  // Close search on outside click
+  useEffect(() => {
+    const handler = () => setSearchOpen(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
 
   // Initialize CesiumJS
   useEffect(() => {
@@ -575,19 +584,175 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         </div>
       )}
 
-      {/* ── Map Controls (right side) ── */}
-      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {/* Zoom */}
-        <button onClick={() => { const C = (window as any).Cesium; viewerRef.current?.camera.zoomIn(viewerRef.current.camera.positionCartographic.height * 0.3); }}
-          style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(10,15,26,0.9)', border: '1px solid #1e2a42', color: '#e2e8f0', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-        <button onClick={() => { viewerRef.current?.camera.zoomOut(viewerRef.current.camera.positionCartographic.height * 0.5); }}
-          style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(10,15,26,0.9)', border: '1px solid #1e2a42', color: '#e2e8f0', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-        {/* North reset */}
-        <button onClick={() => { const C = (window as any).Cesium; const cam = viewerRef.current?.camera; if (cam) { const pos = cam.positionCartographic; cam.flyTo({ destination: C.Cartesian3.fromRadians(pos.longitude, pos.latitude, pos.height), orientation: { heading: 0, pitch: cam.pitch, roll: 0 }, duration: 1 }); } }}
-          style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(10,15,26,0.9)', border: '1px solid #1e2a42', color: '#e2e8f0', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>N</button>
-        {/* Reset view */}
-        <button onClick={resetView}
-          style={{ width: 36, height: 36, borderRadius: 6, background: 'rgba(10,15,26,0.9)', border: '1px solid #1e2a42', color: '#667788', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⌂</button>
+      {/* ── Search Bar (top center) ── */}
+      <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 20, width: 340, maxWidth: '60%' }}>
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            placeholder="Search fishing spots..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onFocus={() => setSearchOpen(true)}
+            style={{
+              width: '100%', padding: '10px 14px 10px 36px', borderRadius: 24,
+              background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.15)', color: '#fff',
+              fontSize: 13, outline: 'none',
+            }}
+          />
+          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#8899aa', fontSize: 14 }}>🔍</span>
+          {searchOpen && searchQuery.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+              background: 'rgba(15,20,35,0.95)', backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12,
+              maxHeight: 240, overflowY: 'auto',
+            }}>
+              {[...FISHING_SPOTS, ...ALL_WAYPOINTS.map(w => ({ id: `wp-${w.id}`, name: w.name, lat: w.lat, lng: w.lng, zoom: 30000, description: `${w.chart} · ${w.type}`, species: [], depth: '', type: w.type, color: '#eab308' }))]
+                .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                .slice(0, 8)
+                .map(spot => (
+                  <div
+                    key={spot.id}
+                    onClick={() => {
+                      const Cesium = (window as any).Cesium;
+                      if (viewerRef.current && Cesium) {
+                        viewerRef.current.camera.flyTo({
+                          destination: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat, (spot as any).zoom || 30000),
+                          orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+                          duration: 2,
+                        });
+                      }
+                      if ('species' in spot && (spot as FishingSpot).species?.length) setSelectedSpot(spot as FishingSpot);
+                      setSearchQuery('');
+                      setSearchOpen(false);
+                    }}
+                    style={{
+                      padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                      borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <span style={{ color: (spot as any).color || '#eab308', fontSize: 10 }}>●</span>
+                    <div>
+                      <div style={{ color: '#e2e8f0', fontSize: 12, fontWeight: 500 }}>{spot.name}</div>
+                      <div style={{ color: '#667788', fontSize: 10 }}>{spot.description?.substring(0, 50)}</div>
+                    </div>
+                  </div>
+                ))}
+              {[...FISHING_SPOTS, ...ALL_WAYPOINTS].filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                <div style={{ padding: '12px 14px', color: '#4a5568', fontSize: 12 }}>No spots found</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Google Maps-style Controls (right side) ── */}
+      <div style={{ position: 'absolute', top: 70, right: 12, zIndex: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Compass */}
+        <button
+          onClick={() => {
+            const Cesium = (window as any).Cesium;
+            const cam = viewerRef.current?.camera;
+            if (cam && Cesium) {
+              const pos = cam.positionCartographic;
+              cam.flyTo({
+                destination: Cesium.Cartesian3.fromRadians(pos.longitude, pos.latitude, pos.height),
+                orientation: { heading: 0, pitch: cam.pitch, roll: 0 },
+                duration: 1,
+              });
+            }
+          }}
+          style={{
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'rgba(30,35,50,0.85)', backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+          }}
+          title="Reset north"
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20">
+            <polygon points="10,2 13,10 10,8 7,10" fill="#ef4444" />
+            <polygon points="10,18 7,10 10,12 13,10" fill="#e2e8f0" />
+          </svg>
+        </button>
+
+        {/* 3D / Tilt toggle */}
+        <button
+          onClick={() => {
+            const Cesium = (window as any).Cesium;
+            const cam = viewerRef.current?.camera;
+            if (cam && Cesium) {
+              const pos = cam.positionCartographic;
+              const newPitch = cam.pitch > Cesium.Math.toRadians(-60) ? Cesium.Math.toRadians(-90) : Cesium.Math.toRadians(-35);
+              cam.flyTo({
+                destination: Cesium.Cartesian3.fromRadians(pos.longitude, pos.latitude, pos.height),
+                orientation: { heading: cam.heading, pitch: newPitch, roll: 0 },
+                duration: 1,
+              });
+            }
+          }}
+          style={{
+            width: 40, height: 28, borderRadius: 6,
+            background: 'rgba(30,35,50,0.85)', backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            color: '#00d4ff', fontSize: 12, fontWeight: 800,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+          }}
+          title="Toggle 3D tilt"
+        >
+          3D
+        </button>
+
+        {/* Center / Home */}
+        <button
+          onClick={resetView}
+          style={{
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'rgba(30,35,50,0.85)', backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+          }}
+          title="Reset view"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="#e2e8f0" strokeWidth="1.5" fill="none" />
+            <circle cx="8" cy="8" r="2" fill="#e2e8f0" />
+            <line x1="8" y1="0" x2="8" y2="3" stroke="#e2e8f0" strokeWidth="1.5" />
+            <line x1="8" y1="13" x2="8" y2="16" stroke="#e2e8f0" strokeWidth="1.5" />
+            <line x1="0" y1="8" x2="3" y2="8" stroke="#e2e8f0" strokeWidth="1.5" />
+            <line x1="13" y1="8" x2="16" y2="8" stroke="#e2e8f0" strokeWidth="1.5" />
+          </svg>
+        </button>
+
+        {/* Zoom +/- */}
+        <div style={{
+          borderRadius: 8, overflow: 'hidden',
+          background: 'rgba(30,35,50,0.85)', backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+        }}>
+          <button
+            onClick={() => viewerRef.current?.camera.zoomIn(viewerRef.current.camera.positionCartographic.height * 0.3)}
+            style={{
+              width: 40, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'transparent', border: 'none', color: '#e2e8f0', fontSize: 18, cursor: 'pointer',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >+</button>
+          <button
+            onClick={() => viewerRef.current?.camera.zoomOut(viewerRef.current.camera.positionCartographic.height * 0.5)}
+            style={{
+              width: 40, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'transparent', border: 'none', color: '#e2e8f0', fontSize: 18, cursor: 'pointer',
+            }}
+          >−</button>
+        </div>
       </div>
 
       {/* ── Layer Panel (left side) ── */}
