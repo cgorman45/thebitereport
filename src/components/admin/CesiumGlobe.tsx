@@ -120,6 +120,12 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         },
       });
 
+      // Ensure scene controller is enabled for mouse/touch input
+      viewer.scene.screenSpaceCameraController.enableZoom = true;
+      viewer.scene.screenSpaceCameraController.enableRotate = true;
+      viewer.scene.screenSpaceCameraController.enableTilt = true;
+      viewer.scene.screenSpaceCameraController.enableLook = true;
+
       viewerRef.current = viewer;
       setLoaded(true);
     }).catch(err => {

@@ -35,16 +35,25 @@ export default function SatelliteViewPage() {
       .catch(() => {});
   }, []);
 
+  // Prevent page scrolling so Cesium gets wheel events
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
   return (
-    <div style={{ minHeight: '100vh', background: '#050a15' }}>
+    <div style={{ height: '100vh', background: '#050a15', overflow: 'hidden' }}>
       <Header />
       <div style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
         {/* Left panel */}
-        <div style={{
-          width: 300, flexShrink: 0, background: '#0a0f1a',
-          borderRight: '1px solid #1e2a42', overflowY: 'auto',
-          padding: 16,
-        }}>
+        <div
+          onWheel={e => e.stopPropagation()}
+          style={{
+            width: 300, flexShrink: 0, background: '#0a0f1a',
+            borderRight: '1px solid #1e2a42', overflowY: 'auto',
+            padding: 16,
+          }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h2 style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 700, margin: 0 }}>
               🛰 Satellite Tracker
