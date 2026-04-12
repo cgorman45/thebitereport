@@ -225,6 +225,49 @@ export const FISHING_SPOTS: FishingSpot[] = [
   },
   // ── Offshore banks / numbered spots (from chart contours) ──
   {
+    id: 'west-butterfly',
+    name: 'West Butterfly (162)',
+    lat: 32.200, lng: -118.350,
+    zoom: 50000, radiusKm: 10,
+    description: 'Western butterfly bank. Deep structure that holds yellowtail and tuna. Part of the butterfly complex.',
+    species: ['Yellowtail', 'Yellowfin Tuna', 'Dorado'],
+    depth: '400-1200ft',
+    type: 'bank',
+    color: '#22c55e',
+    // Traced from white dotted contour line on Baja Directions chart
+    // Irregular butterfly-wing shape, elongated roughly N-S
+    polygon: [
+      [-118.42, 32.280], [-118.38, 32.300], [-118.33, 32.290],
+      [-118.28, 32.270], [-118.25, 32.250], [-118.23, 32.230],
+      [-118.22, 32.200], [-118.23, 32.170], [-118.25, 32.150],
+      [-118.28, 32.130], [-118.30, 32.120], [-118.33, 32.115],
+      [-118.36, 32.120], [-118.39, 32.135], [-118.41, 32.155],
+      [-118.43, 32.180], [-118.44, 32.210], [-118.44, 32.240],
+      [-118.43, 32.265], [-118.42, 32.280],
+    ],
+  },
+  {
+    id: 'east-butterfly',
+    name: 'East Butterfly (267)',
+    lat: 32.100, lng: -117.900,
+    zoom: 50000, radiusKm: 12,
+    description: 'Eastern butterfly bank. Larger of the two butterfly structures. Good tuna and yellowtail grounds.',
+    species: ['Yellowfin Tuna', 'Yellowtail', 'Dorado', 'Wahoo'],
+    depth: '300-1000ft',
+    type: 'bank',
+    color: '#22c55e',
+    // Traced from white dotted contour — wider, more irregular shape
+    polygon: [
+      [-117.98, 32.180], [-117.93, 32.195], [-117.87, 32.190],
+      [-117.82, 32.175], [-117.78, 32.155], [-117.75, 32.130],
+      [-117.74, 32.100], [-117.75, 32.070], [-117.77, 32.045],
+      [-117.80, 32.025], [-117.84, 32.015], [-117.88, 32.010],
+      [-117.92, 32.015], [-117.96, 32.030], [-117.99, 32.050],
+      [-118.01, 32.075], [-118.02, 32.105], [-118.01, 32.135],
+      [-117.99, 32.160], [-117.98, 32.180],
+    ],
+  },
+  {
     id: '209-spot',
     name: '209 / 277 Spot',
     // Contour shows this in the outer Santa Barbara passage
