@@ -8,13 +8,15 @@ export interface FishingSpot {
   name: string;
   lat: number;
   lng: number;
-  zoom: number;      // Camera altitude in meters for close-up view
-  radiusKm: number;  // Geofence radius in km
+  zoom: number;       // Camera altitude in meters for close-up view
+  radiusKm: number;   // Fallback radius if no polygon
   description: string;
   species: string[];
   depth: string;
   type: 'reef' | 'bank' | 'island' | 'canyon' | 'kelp' | 'open';
   color: string;
+  /** Custom geofence polygon following bathymetric contours [lng, lat][] */
+  polygon?: [number, number][];
 }
 
 export const FISHING_SPOTS: FishingSpot[] = [
@@ -22,7 +24,6 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'nine-mile-bank',
     name: 'Nine Mile Bank',
-    // Contour shows long NW-SE ridge from ~32°38'N to ~32°28'N, centered around 117°25'W
     lat: 32.533, lng: -117.417,
     zoom: 50000, radiusKm: 12,
     description: 'Long underwater ridge ~14mi from Mission Bay. Premier kelp paddy zone. Yellowtail, dorado, and tuna.',
@@ -30,11 +31,19 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '300-600ft',
     type: 'bank',
     color: '#ef4444',
+    // NW-SE elongated ridge, ~10 miles long, narrow
+    polygon: [
+      [-117.50, 32.650], [-117.47, 32.660], [-117.42, 32.650],
+      [-117.38, 32.620], [-117.35, 32.580], [-117.33, 32.540],
+      [-117.32, 32.500], [-117.33, 32.470], [-117.35, 32.450],
+      [-117.38, 32.440], [-117.41, 32.450], [-117.44, 32.470],
+      [-117.46, 32.500], [-117.48, 32.540], [-117.50, 32.580],
+      [-117.51, 32.620], [-117.50, 32.650],
+    ],
   },
   {
     id: 'coronado-islands',
     name: 'Coronado Islands',
-    // Contour wraps around island chain at ~32°25'N, 117°15'W
     lat: 32.417, lng: -117.250,
     zoom: 40000, radiusKm: 6,
     description: 'Mexican islands south of the border. World-class yellowtail fishing on the weather side.',
@@ -42,6 +51,14 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '60-300ft',
     type: 'island',
     color: '#f97316',
+    // Chain of 4 islands running N-S, contour wraps around all
+    polygon: [
+      [-117.29, 32.460], [-117.26, 32.455], [-117.24, 32.445],
+      [-117.23, 32.430], [-117.22, 32.410], [-117.22, 32.390],
+      [-117.23, 32.375], [-117.25, 32.370], [-117.27, 32.375],
+      [-117.28, 32.390], [-117.29, 32.410], [-117.30, 32.430],
+      [-117.30, 32.450], [-117.29, 32.460],
+    ],
   },
   {
     id: 'la-jolla-kelp',
@@ -71,7 +88,6 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'catalina-island',
     name: 'Catalina Island',
-    // Contour shows broad shelf, especially east end
     lat: 33.387, lng: -118.416,
     zoom: 80000, radiusKm: 15,
     description: 'Iconic SoCal island. Yellowtail at the east end, calico bass all around, white seabass in spring.',
@@ -79,11 +95,19 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '30-400ft',
     type: 'island',
     color: '#f97316',
+    // Elongated NW-SE island with broader shelf on east end
+    polygon: [
+      [-118.60, 33.480], [-118.55, 33.490], [-118.48, 33.480],
+      [-118.40, 33.460], [-118.33, 33.430], [-118.28, 33.400],
+      [-118.25, 33.370], [-118.27, 33.340], [-118.30, 33.320],
+      [-118.35, 33.310], [-118.40, 33.320], [-118.46, 33.340],
+      [-118.52, 33.370], [-118.56, 33.400], [-118.59, 33.430],
+      [-118.60, 33.460], [-118.60, 33.480],
+    ],
   },
   {
     id: 'san-clemente-island',
     name: 'San Clemente Island',
-    // Contour shows large shelf, especially China Point area (south end)
     lat: 32.900, lng: -118.490,
     zoom: 80000, radiusKm: 15,
     description: 'Navy-controlled island with incredible fishing. Yellowtail schools on the lee side.',
@@ -91,11 +115,18 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '60-600ft',
     type: 'island',
     color: '#f97316',
+    // Long N-S island, wider shelf on east (lee) side
+    polygon: [
+      [-118.56, 33.020], [-118.52, 33.030], [-118.48, 33.010],
+      [-118.44, 32.970], [-118.42, 32.920], [-118.41, 32.870],
+      [-118.42, 32.820], [-118.44, 32.800], [-118.47, 32.790],
+      [-118.50, 32.800], [-118.53, 32.820], [-118.55, 32.860],
+      [-118.56, 32.910], [-118.57, 32.960], [-118.56, 33.020],
+    ],
   },
   {
     id: 'tanner-bank',
     name: 'Tanner Bank',
-    // Tight contour circle at ~32°42'N, 119°08'W
     lat: 32.700, lng: -119.133,
     zoom: 60000, radiusKm: 8,
     description: 'Deep offshore seamount ~60mi out. Giant bluefin tuna, yellowtail.',
@@ -103,11 +134,17 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '600-3000ft',
     type: 'bank',
     color: '#ef4444',
+    // Irregular oval, slightly elongated E-W
+    polygon: [
+      [-119.20, 32.740], [-119.15, 32.750], [-119.08, 32.740],
+      [-119.04, 32.720], [-119.03, 32.700], [-119.04, 32.680],
+      [-119.08, 32.660], [-119.15, 32.660], [-119.20, 32.670],
+      [-119.23, 32.690], [-119.23, 32.720], [-119.20, 32.740],
+    ],
   },
   {
     id: 'cortes-bank',
     name: 'Cortes Bank',
-    // Separate seamount at ~32°28'N, 119°08'W, tight contour
     lat: 32.467, lng: -119.133,
     zoom: 60000, radiusKm: 6,
     description: 'Remote seamount that nearly breaks the surface. Huge yellowtail and tuna.',
@@ -115,11 +152,17 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '50-3000ft',
     type: 'bank',
     color: '#ef4444',
+    // Small tight contour — nearly circular but irregular
+    polygon: [
+      [-119.18, 32.500], [-119.13, 32.510], [-119.08, 32.500],
+      [-119.06, 32.480], [-119.07, 32.450], [-119.10, 32.440],
+      [-119.15, 32.440], [-119.18, 32.460], [-119.19, 32.480],
+      [-119.18, 32.500],
+    ],
   },
   {
     id: 'sixty-mile-bank',
     name: 'Sixty Mile Bank',
-    // Contour at ~31°58'N, 118°06'W
     lat: 31.967, lng: -118.100,
     zoom: 60000, radiusKm: 8,
     description: 'Deep offshore bank ~60mi south. Excellent tuna grounds.',
@@ -127,6 +170,13 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '300-1500ft',
     type: 'bank',
     color: '#ef4444',
+    // Oval shape, slightly elongated NE-SW per chart
+    polygon: [
+      [-118.15, 32.010], [-118.08, 32.000], [-118.04, 31.980],
+      [-118.03, 31.960], [-118.04, 31.940], [-118.08, 31.920],
+      [-118.14, 31.920], [-118.18, 31.940], [-118.20, 31.960],
+      [-118.19, 31.990], [-118.15, 32.010],
+    ],
   },
   // ── Baja ──
   {
@@ -189,7 +239,6 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'hidden-bank',
     name: 'Hidden Bank',
-    // Chart shows this at ~31°52'N, 117°26'W
     lat: 31.867, lng: -117.433,
     zoom: 50000, radiusKm: 5,
     description: 'Subsurface structure that holds bait. Good kelp paddy zone for yellowtail and dorado.',
@@ -197,11 +246,16 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '500-900ft',
     type: 'bank',
     color: '#eab308',
+    // Small bump visible on chart contour
+    polygon: [
+      [-117.48, 31.900], [-117.43, 31.910], [-117.39, 31.895],
+      [-117.37, 31.870], [-117.38, 31.845], [-117.42, 31.835],
+      [-117.46, 31.845], [-117.48, 31.870], [-117.48, 31.900],
+    ],
   },
   {
     id: '43-fathom-spot',
     name: '43 Fathom Spot',
-    // Chart shows at ~32°41'N, 117°56'W — between SCI and Nine Mile
     lat: 32.683, lng: -117.933,
     zoom: 40000, radiusKm: 4,
     description: 'Shallow underwater pinnacle between San Clemente and Nine Mile Bank.',
@@ -209,6 +263,12 @@ export const FISHING_SPOTS: FishingSpot[] = [
     depth: '258ft (43 fathoms)',
     type: 'reef',
     color: '#eab308',
+    // Small pinnacle — tight contour
+    polygon: [
+      [-117.97, 32.710], [-117.93, 32.715], [-117.90, 32.700],
+      [-117.89, 32.680], [-117.90, 32.660], [-117.94, 32.655],
+      [-117.97, 32.665], [-117.98, 32.685], [-117.97, 32.710],
+    ],
   },
 ];
 

@@ -354,76 +354,81 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         const R = 6371;
         const radiusM = spot.radiusKm * 1000;
 
-        // Count boats inside this geofence
+        // Count boats inside this geofence (polygon or radius)
         let boatsInside = 0;
         for (const v of allVesselsForCount) {
-          const dLat = ((v.lat - spot.lat) * Math.PI) / 180;
-          const dLng = ((v.lng - spot.lng) * Math.PI) / 180;
-          const a = Math.sin(dLat / 2) ** 2 +
-            Math.cos((spot.lat * Math.PI) / 180) * Math.cos((v.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-          const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          if (dist <= spot.radiusKm) boatsInside++;
+          let inside = false;
+          if (spot.polygon && spot.polygon.length > 2) {
+            // Point-in-polygon test (ray casting)
+            const poly = spot.polygon;
+            let j = poly.length - 1;
+            for (let pi = 0; pi < poly.length; pi++) {
+              if ((poly[pi][1] > v.lat) !== (poly[j][1] > v.lat) &&
+                  v.lng < (poly[j][0] - poly[pi][0]) * (v.lat - poly[pi][1]) / (poly[j][1] - poly[pi][1]) + poly[pi][0]) {
+                inside = !inside;
+              }
+              j = pi;
+            }
+          } else {
+            // Radius-based check
+            const dLat = ((v.lat - spot.lat) * Math.PI) / 180;
+            const dLng = ((v.lng - spot.lng) * Math.PI) / 180;
+            const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos((spot.lat * Math.PI) / 180) * Math.cos((v.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+            const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            inside = dist <= spot.radiusKm;
+          }
+          if (inside) boatsInside++;
         }
 
         const isActive = boatsInside > 0;
         const color = Cesium.Color.fromCssColorString(spot.color);
 
-        // Draw geofence circle
-        const circlePoints: number[] = [];
-        for (let a = 0; a <= 360; a += 5) {
-          const rad = (a * Math.PI) / 180;
-          const dLat = (radiusM * Math.cos(rad) / (R * 1000)) * (180 / Math.PI);
-          const dLng = (radiusM * Math.sin(rad) / (R * 1000 * Math.cos(spot.lat * Math.PI / 180))) * (180 / Math.PI);
-          circlePoints.push(spot.lng + dLng, spot.lat + dLat);
+        // Use custom polygon contour if available, otherwise compute circle
+        let geofencePoints: number[];
+        if (spot.polygon && spot.polygon.length > 2) {
+          // Custom contour from bathymetric chart
+          geofencePoints = spot.polygon.flatMap(([lng, lat]) => [lng, lat]);
+          // Close the polygon
+          geofencePoints.push(spot.polygon[0][0], spot.polygon[0][1]);
+        } else {
+          // Fallback: computed circle
+          geofencePoints = [];
+          for (let a = 0; a <= 360; a += 5) {
+            const rad = (a * Math.PI) / 180;
+            const dLat = (radiusM * Math.cos(rad) / (R * 1000)) * (180 / Math.PI);
+            const dLng = (radiusM * Math.sin(rad) / (R * 1000 * Math.cos(spot.lat * Math.PI / 180))) * (180 / Math.PI);
+            geofencePoints.push(spot.lng + dLng, spot.lat + dLat);
+          }
         }
 
-        // Ground-level geofence border (always visible)
+        // Ground-level geofence border — very transparent
         viewer.entities.add({
           id: `geofence-${spot.id}`,
           polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArray(circlePoints),
-            width: isActive ? 3 : 1.5,
-            material: color.withAlpha(isActive ? 0.6 : 0.15),
+            positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
+            width: isActive ? 2.5 : 1,
+            material: color.withAlpha(isActive ? 0.45 : 0.1),
             clampToGround: true,
           },
         });
 
         // 3D vertical wall rising from ocean — like airspace zones
-        // Shows on hover/selected or when active with boats
         const isSelected = selectedSpot?.id === spot.id;
-        const wallHeight = isSelected ? 8000 : isActive ? 3000 : 0; // meters
+        const wallHeight = isSelected ? 5000 : isActive ? 2000 : 0;
 
         if (wallHeight > 0) {
-          // Wall uses the same circle points but with height
-          const wallPositions: number[] = [];
-          for (let a = 0; a <= 360; a += 10) {
-            const rad = (a * Math.PI) / 180;
-            const dLat = (radiusM * Math.cos(rad) / (R * 1000)) * (180 / Math.PI);
-            const dLng = (radiusM * Math.sin(rad) / (R * 1000 * Math.cos(spot.lat * Math.PI / 180))) * (180 / Math.PI);
-            wallPositions.push(spot.lng + dLng, spot.lat + dLat);
-          }
+          const wallCount = geofencePoints.length / 2;
 
           viewer.entities.add({
             id: `geofence-wall-${spot.id}`,
             wall: {
-              positions: Cesium.Cartesian3.fromDegreesArray(wallPositions),
-              maximumHeights: Array(Math.ceil(360 / 10) + 1).fill(wallHeight),
-              minimumHeights: Array(Math.ceil(360 / 10) + 1).fill(0),
-              material: color.withAlpha(isSelected ? 0.25 : 0.12),
+              positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
+              maximumHeights: Array(wallCount).fill(wallHeight),
+              minimumHeights: Array(wallCount).fill(0),
+              material: color.withAlpha(isSelected ? 0.15 : 0.06),
               outline: true,
-              outlineColor: color.withAlpha(0.5),
-            },
-          });
-
-          // Top ring at wall height
-          viewer.entities.add({
-            id: `geofence-top-${spot.id}`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights(
-                wallPositions.flatMap((v, i) => i % 2 === 0 ? [v] : [v, wallHeight])
-              ),
-              width: 2,
-              material: color.withAlpha(0.6),
+              outlineColor: color.withAlpha(0.3),
             },
           });
         }
