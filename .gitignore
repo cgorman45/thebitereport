@@ -54,3 +54,6 @@ ais-server/node_modules/
 mobile/node_modules/
 services/kelp-detection/ml-training/data/
 services/kelp-detection/ml-training/models/
+
+# CesiumJS static assets (copied at build time)
+public/Cesium/

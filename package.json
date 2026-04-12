@@ -11,8 +11,10 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
     "@vercel/analytics": "^2.0.1",
+    "ajv": "^8.18.0",
     "cesium": "^1.140.0",
     "cheerio": "^1.2.0",
+    "copy-webpack-plugin": "^14.0.0",
     "leaflet": "^1.9.4",
     "mapbox-gl": "^3.21.0",
     "next": "^15.5.14",
