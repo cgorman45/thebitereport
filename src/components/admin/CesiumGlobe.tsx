@@ -339,6 +339,77 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       }
     }
 
+    // ── Fishing Spot Geofences ──
+    if (showSpots) {
+      // Count vessels inside each geofence
+      const allVesselsForCount = showTrajectories && trajectories[trajIndex]
+        ? trajectories[trajIndex].vessels
+        : vessels.map((v: any) => ({
+            lat: v.geometry.coordinates[1],
+            lng: v.geometry.coordinates[0],
+            speed: v.properties.speed || 0,
+          }));
+
+      for (const spot of FISHING_SPOTS) {
+        const R = 6371;
+        const radiusM = spot.radiusKm * 1000;
+
+        // Count boats inside this geofence
+        let boatsInside = 0;
+        for (const v of allVesselsForCount) {
+          const dLat = ((v.lat - spot.lat) * Math.PI) / 180;
+          const dLng = ((v.lng - spot.lng) * Math.PI) / 180;
+          const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos((spot.lat * Math.PI) / 180) * Math.cos((v.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+          const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          if (dist <= spot.radiusKm) boatsInside++;
+        }
+
+        const isActive = boatsInside > 0;
+        const color = Cesium.Color.fromCssColorString(spot.color);
+
+        // Draw geofence circle
+        const circlePoints: number[] = [];
+        for (let a = 0; a <= 360; a += 5) {
+          const rad = (a * Math.PI) / 180;
+          const dLat = (radiusM * Math.cos(rad) / (R * 1000)) * (180 / Math.PI);
+          const dLng = (radiusM * Math.sin(rad) / (R * 1000 * Math.cos(spot.lat * Math.PI / 180))) * (180 / Math.PI);
+          circlePoints.push(spot.lng + dLng, spot.lat + dLat);
+        }
+
+        // Geofence border
+        viewer.entities.add({
+          id: `geofence-${spot.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(circlePoints),
+            width: isActive ? 3 : 1.5,
+            material: color.withAlpha(isActive ? 0.7 : 0.25),
+            clampToGround: true,
+          },
+        });
+
+        // Active count label
+        if (isActive) {
+          viewer.entities.add({
+            id: `geofence-count-${spot.id}`,
+            position: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat + (spot.radiusKm / 111), 100),
+            label: {
+              text: `${boatsInside} boat${boatsInside > 1 ? 's' : ''}`,
+              font: 'bold 11px sans-serif',
+              fillColor: color,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              pixelOffset: new Cesium.Cartesian2(0, -4),
+              distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4e5),
+              scaleByDistance: new Cesium.NearFarScalar(1e3, 1, 3e5, 0.4),
+            },
+          });
+        }
+      }
+    }
+
     // ── Baja Directions Waypoints ──
     if (showWaypoints) {
       const chartColors: Record<string, string> = {
