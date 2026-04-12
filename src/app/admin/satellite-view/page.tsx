@@ -116,7 +116,6 @@ export default function SatelliteViewPage() {
         <div style={{ flex: 1, position: 'relative' }}>
           <CesiumGlobe
             cesiumIonToken={process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN}
-            googleApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
           />
         </div>
       </div>
