@@ -7,6 +7,71 @@ import type { FillLayer, SymbolLayer } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import Header from '@/components/Header';
 
+const ADMIN_USER = 'admin';
+const ADMIN_PASS = 'demo';
+const AUTH_KEY = 'kelp-admin-auth';
+
+function AdminLogin({ onAuth }: { onAuth: () => void }) {
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const [error, setError] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (user === ADMIN_USER && pass === ADMIN_PASS) {
+      sessionStorage.setItem(AUTH_KEY, 'true');
+      onAuth();
+    } else {
+      setError(true);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0a0f1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#131b2e', border: '1px solid #1e2a42', borderRadius: 16, padding: 40, width: 360, textAlign: 'center' }}>
+        <h1 style={{ color: '#e2e8f0', fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
+          The <span style={{ color: '#00d4ff' }}>Bite</span> Report
+        </h1>
+        <p style={{ color: '#667788', fontSize: 13, marginBottom: 24 }}>Admin Access Required</p>
+        <form onSubmit={handleSubmit}>
+          <input
+            type="text"
+            placeholder="Username"
+            value={user}
+            onChange={e => { setUser(e.target.value); setError(false); }}
+            style={{
+              width: '100%', padding: '10px 14px', marginBottom: 10, borderRadius: 8,
+              background: '#0a0f1a', border: '1px solid #1e2a42', color: '#e2e8f0',
+              fontSize: 14, outline: 'none',
+            }}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={pass}
+            onChange={e => { setPass(e.target.value); setError(false); }}
+            style={{
+              width: '100%', padding: '10px 14px', marginBottom: 16, borderRadius: 8,
+              background: '#0a0f1a', border: `1px solid ${error ? '#ef4444' : '#1e2a42'}`, color: '#e2e8f0',
+              fontSize: 14, outline: 'none',
+            }}
+          />
+          {error && <p style={{ color: '#ef4444', fontSize: 12, marginBottom: 12 }}>Invalid credentials</p>}
+          <button
+            type="submit"
+            style={{
+              width: '100%', padding: '10px', borderRadius: 8, fontSize: 14, fontWeight: 700,
+              background: '#00d4ff', color: '#0a0f1a', border: 'none', cursor: 'pointer',
+            }}
+          >
+            Sign In
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 interface BoatInfo {
   name: string;
   mmsi: number;
@@ -112,6 +177,22 @@ function actionColor(action: string) {
 }
 
 export default function KelpSignalsDemo() {
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem(AUTH_KEY) === 'true') {
+      setAuthed(true);
+    }
+  }, []);
+
+  if (!authed) {
+    return <AdminLogin onAuth={() => setAuthed(true)} />;
+  }
+
+  return <KelpSignalsDashboard />;
+}
+
+function KelpSignalsDashboard() {
   const mapRef = useRef<MapRef>(null);
   const [data, setData] = useState<ScoresResponse | null>(null);
   const [loading, setLoading] = useState(true);
