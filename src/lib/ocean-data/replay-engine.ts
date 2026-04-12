@@ -106,9 +106,9 @@ function interpolateAngle(a: number, b: number, t: number): number {
 
 // Known port/harbor locations — vessels near these are parked, not fishing
 const HARBORS = [
-  { lat: 32.715, lng: -117.175, radiusKm: 3, name: 'San Diego Harbor' },
-  { lat: 32.755, lng: -117.235, name: 'Mission Bay', radiusKm: 2 },
-  { lat: 32.850, lng: -117.255, name: 'La Jolla Shore', radiusKm: 1 },
+  { lat: 32.715, lng: -117.175, radiusKm: 5, name: 'San Diego Harbor/Bay' },
+  { lat: 32.755, lng: -117.215, name: 'Mission Bay', radiusKm: 2.5 },
+  { lat: 32.850, lng: -117.260, name: 'La Jolla Shore', radiusKm: 1.5 },
   { lat: 33.460, lng: -117.620, name: 'Dana Point', radiusKm: 1.5 },
   { lat: 33.750, lng: -118.280, name: 'Long Beach/LA Harbor', radiusKm: 5 },
   { lat: 33.600, lng: -117.900, name: 'Newport/Huntington', radiusKm: 2 },
@@ -147,8 +147,11 @@ export function detectHotspots(
 
   for (let i = 0; i < snapshots.length; i++) {
     const snap = snapshots[i];
-    // Find slow/stopped vessels that are NOT in a harbor
-    const slowVessels = snap.vessels.filter(v => v.speed < minSpeedKts && !isInHarbor(v.lat, v.lng));
+    // Find fishing-speed vessels (0.3-3 kts) NOT in a harbor
+    // Below 0.3 kts = anchored/docked, above 3 kts = transiting
+    const slowVessels = snap.vessels.filter(v =>
+      v.speed >= 0.3 && v.speed < minSpeedKts && !isInHarbor(v.lat, v.lng)
+    );
 
     // Cluster slow vessels within radius
     const assigned = new Set<number>();
@@ -204,7 +207,9 @@ export function detectHotspots(
     }));
 
     const boatCount = vessels.length;
-    const score = Math.min(10, Math.round(boatCount * 2 + durationMin / 15));
+    // Require at least 10 minutes of convergence to be meaningful
+    if (durationMin < 10 && boatCount < 5) continue;
+    const score = Math.min(10, Math.round(boatCount * 1.5 + durationMin / 20));
 
     // Generate narrative
     const boatNames = vessels.slice(0, 3).map(v => v.name).join(', ');
