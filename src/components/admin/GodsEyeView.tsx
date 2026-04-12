@@ -285,6 +285,14 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [satPasses, setSatPasses] = useState<SatellitePassInfo | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date().toISOString());
+  const [liveVessels, setLiveVessels] = useState<{ type: string; features: object[] } | null>(null);
+  const [showLayers, setShowLayers] = useState({
+    vessels: true,
+    zones: true,
+    kelp: true,
+    trails: true,
+    satPasses: true,
+  });
   const playIntervalRef = useRef<ReturnType<typeof setInterval>>();
 
   const cfg = modeConfig[renderMode];
@@ -300,6 +308,19 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
         }
       })
       .catch(() => {});
+  }, []);
+
+  // Fetch live vessels (all fishing boats) + refresh every 30s
+  useEffect(() => {
+    const fetchVessels = () => {
+      fetch('/api/ocean-data/all-vessels')
+        .then(r => r.json())
+        .then(d => { if (d.type === 'FeatureCollection') setLiveVessels(d); })
+        .catch(() => {});
+    };
+    fetchVessels();
+    const interval = setInterval(fetchVessels, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   // Fetch satellite passes
@@ -399,6 +420,7 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
       if (e.key === '4') setRenderMode('targeting');
       if (e.key === 'ArrowLeft') setCurrentIndex(i => Math.max(0, i - 1));
       if (e.key === 'ArrowRight') setCurrentIndex(i => Math.min(snapshots.length - 1, i + 1));
+      if (e.key === 'v') setShowLayers(l => ({ ...l, vessels: !l.vessels }));
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -486,7 +508,7 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
           <NavigationControl position="top-right" showCompass={false} />
 
           {/* Scored zones */}
-          <Source id="ge-scores" type="geojson" data={geojsonScores as GeoJSON.FeatureCollection}>
+          {showLayers.zones && <Source id="ge-scores" type="geojson" data={geojsonScores as GeoJSON.FeatureCollection}>
             <Layer
               id="ge-score-circles"
               type="fill"
@@ -512,10 +534,10 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
                 'text-halo-width': 2,
               }}
             />
-          </Source>
+          </Source>}
 
           {/* Vessel trails */}
-          <Source id="ge-trails" type="geojson" data={vesselTrailsGeoJson() as any}>
+          {showLayers.trails && <Source id="ge-trails" type="geojson" data={vesselTrailsGeoJson() as any}>
             <Layer
               id="ge-vessel-trails"
               type="line"
@@ -525,9 +547,9 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
                 'line-opacity': 0.4,
               }}
             />
-          </Source>
+          </Source>}
 
-          {/* Vessels at current time */}
+          {/* Vessels at current time (from trajectory replay) */}
           <Source id="ge-vessels" type="geojson" data={vesselGeoJson() as any}>
             <Layer
               id="ge-vessels-stopped"
@@ -572,7 +594,7 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
           </Source>
 
           {/* Kelp paddies + drift */}
-          {paddyData && (
+          {showLayers.kelp && paddyData && (
             <Source id="ge-paddies" type="geojson" data={paddyData as GeoJSON.FeatureCollection}>
               <Layer
                 id="ge-drift-path"
@@ -599,11 +621,113 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
               />
             </Source>
           )}
+
+          {/* Live fishing vessels (all AIS boats) */}
+          {showLayers.vessels && liveVessels && (
+            <Source id="ge-live-vessels" type="geojson" data={liveVessels as GeoJSON.FeatureCollection}>
+              <Layer
+                id="ge-live-stopped"
+                type="circle"
+                filter={['==', ['get', 'status'], 'stopped']}
+                paint={{
+                  'circle-radius': 5,
+                  'circle-color': cfg.vesselStoppedColor,
+                  'circle-opacity': 0.8,
+                  'circle-stroke-width': 1.5,
+                  'circle-stroke-color': '#ffffff44',
+                }}
+              />
+              <Layer
+                id="ge-live-slow"
+                type="circle"
+                filter={['==', ['get', 'status'], 'slow']}
+                paint={{
+                  'circle-radius': 4,
+                  'circle-color': renderMode === 'thermal' ? '#ff9900' : '#eab308',
+                  'circle-opacity': 0.6,
+                  'circle-stroke-width': 1,
+                  'circle-stroke-color': '#ffffff22',
+                }}
+              />
+              <Layer
+                id="ge-live-transit"
+                type="circle"
+                filter={['==', ['get', 'status'], 'transit']}
+                paint={{
+                  'circle-radius': 3,
+                  'circle-color': cfg.vesselColor,
+                  'circle-opacity': 0.3,
+                }}
+              />
+              {/* Name labels for stopped/slow vessels */}
+              <Layer
+                id="ge-live-labels"
+                type="symbol"
+                filter={['in', ['get', 'status'], ['literal', ['stopped', 'slow']]]}
+                layout={{
+                  'text-field': ['get', 'name'],
+                  'text-size': 9,
+                  'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+                  'text-offset': [0, 1.3],
+                  'text-allow-overlap': false,
+                }}
+                paint={{
+                  'text-color': cfg.timestampColor,
+                  'text-halo-color': '#000',
+                  'text-halo-width': 1,
+                }}
+              />
+            </Source>
+          )}
         </Map>
       </div>
 
+      {/* Layer toggle panel */}
+      <div style={{
+        position: 'absolute', top: 50, left: 10, zIndex: 20,
+        background: 'rgba(10, 15, 26, 0.92)', backdropFilter: 'blur(8px)',
+        border: `1px solid ${cfg.textColor}22`, borderRadius: 8,
+        padding: '8px 10px', fontSize: 10,
+      }}>
+        <div style={{ color: cfg.textColor, fontWeight: 700, marginBottom: 6, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1 }}>
+          Layers
+        </div>
+        {([
+          { key: 'vessels', label: 'All Vessels', count: liveVessels?.features?.length, color: cfg.vesselColor, hotkey: 'V' },
+          { key: 'zones', label: 'Scored Zones', color: cfg.zoneColor },
+          { key: 'trails', label: 'Vessel Trails', color: cfg.vesselColor },
+          { key: 'kelp', label: 'Confirmed Kelp', color: '#22c55e' },
+          { key: 'satPasses', label: 'Sat Passes', color: '#a855f7' },
+        ] as const).map(layer => (
+          <div
+            key={layer.key}
+            onClick={() => setShowLayers(l => ({ ...l, [layer.key]: !l[layer.key] }))}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0',
+              cursor: 'pointer', opacity: showLayers[layer.key] ? 1 : 0.35,
+            }}
+          >
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: showLayers[layer.key] ? layer.color : '#333',
+              border: `1px solid ${layer.color}66`,
+              flexShrink: 0,
+            }} />
+            <span style={{ color: cfg.textColor, flex: 1 }}>{layer.label}</span>
+            {'count' in layer && layer.count != null && (
+              <span style={{ color: cfg.timestampColor, fontFamily: 'monospace', fontSize: 9 }}>
+                {layer.count}
+              </span>
+            )}
+            {'hotkey' in layer && (
+              <span style={{ color: '#4a5568', fontSize: 8, fontFamily: 'monospace' }}>{layer.hotkey}</span>
+            )}
+          </div>
+        ))}
+      </div>
+
       {/* Satellite pass indicator */}
-      <SatPassIndicator passes={satPasses} mode={renderMode} />
+      {showLayers.satPasses && <SatPassIndicator passes={satPasses} mode={renderMode} />}
 
       {/* Time slider */}
       {snapshots.length > 0 && (
@@ -629,6 +753,7 @@ export default function GodsEyeView({ onClose, scoresData, paddyData }: GodsEyeP
         <span style={{ color: cfg.textColor }}>1-4</span> Mode &nbsp;
         <span style={{ color: cfg.textColor }}>Space</span> Play &nbsp;
         <span style={{ color: cfg.textColor }}>←→</span> Scrub &nbsp;
+        <span style={{ color: cfg.textColor }}>V</span> Vessels &nbsp;
         <span style={{ color: cfg.textColor }}>Esc</span> Exit
       </div>
     </div>
