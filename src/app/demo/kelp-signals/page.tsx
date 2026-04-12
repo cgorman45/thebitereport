@@ -5,7 +5,11 @@ import Map, { NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import type { MapRef } from 'react-map-gl/mapbox';
 import type { FillLayer, SymbolLayer } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import Header from '@/components/Header';
+
+const GodsEyeView = dynamic(() => import('@/components/admin/GodsEyeView'), { ssr: false });
 
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = 'demo';
@@ -202,7 +206,8 @@ function KelpSignalsDashboard() {
   const [vesselData, setVesselData] = useState<{ type: string; features: object[] } | null>(null);
   const [confirming, setConfirming] = useState<Set<string>>(new Set());
   const [ordering, setOrdering] = useState<Set<string>>(new Set());
-  const [orderResults, setOrderResults] = useState<Record<string, { scene: string; orderId: string; status: string }>>({});
+  const [godsEyeOpen, setGodsEyeOpen] = useState(false);
+  const [orderResults, setOrderResults] = useState<Record<string, { scene: string; orderId: string; status: string; reviewId?: string }>>({});
 
   const handleConfirmKelp = async (zone: ScoredZone) => {
     setConfirming(prev => new Set(prev).add(zone.id));
@@ -248,6 +253,7 @@ function KelpSignalsDashboard() {
             scene: data.scene.id,
             orderId: data.order.id,
             status: data.order.status,
+            reviewId: data.satellite_order_id,
           },
         }));
       } else {
@@ -309,6 +315,17 @@ function KelpSignalsDashboard() {
   const zones = data?.zones || [];
   const geojsonData = data ? { type: data.type, features: data.features } : { type: 'FeatureCollection', features: [] };
 
+  // God's Eye fullscreen overlay
+  if (godsEyeOpen) {
+    return (
+      <GodsEyeView
+        onClose={() => setGodsEyeOpen(false)}
+        scoresData={geojsonData as any}
+        paddyData={paddyData as any}
+      />
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: '#0a0f1a' }}>
       <Header />
@@ -324,8 +341,30 @@ function KelpSignalsDashboard() {
               Boats stopping in open ocean trigger 1km geofence circles. Multiple boats = higher kelp paddy probability.
             </p>
           </div>
-          <div style={{ fontSize: 11, color: '#4a5568' }}>
-            Updated: {lastRefresh.toLocaleTimeString()} • Auto-refreshes every 30s
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              onClick={() => setGodsEyeOpen(true)}
+              style={{
+                padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                background: '#ef444422', color: '#ef4444', cursor: 'pointer',
+                border: '1px solid #ef444433',
+              }}
+            >
+              🎯 God&apos;s Eye View
+            </button>
+            <Link
+              href="/admin/satellite-review"
+              style={{
+                padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: '#a855f722', color: '#a855f7', textDecoration: 'none',
+                border: '1px solid #a855f733',
+              }}
+            >
+              Satellite Orders →
+            </Link>
+            <span style={{ fontSize: 11, color: '#4a5568' }}>
+              Updated: {lastRefresh.toLocaleTimeString()} • Auto-refreshes every 30s
+            </span>
           </div>
         </div>
 
@@ -609,9 +648,9 @@ function KelpSignalsDashboard() {
                           <div style={{ display: 'flex', gap: 3, flexDirection: 'column' }}>
                             {/* Sentinel-2 10m (free) */}
                             {orderResults[`${zone.id}-sentinel`] ? (
-                              <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#22c55e22', color: '#22c55e' }}>
-                                10m FOUND
-                              </span>
+                              <Link href={orderResults[`${zone.id}-sentinel`].reviewId ? `/admin/satellite-review/${orderResults[`${zone.id}-sentinel`].reviewId}` : '/admin/satellite-review'} style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#22c55e22', color: '#22c55e', textDecoration: 'none' }}>
+                                10m FOUND →
+                              </Link>
                             ) : (
                               <button
                                 onClick={() => handleOrderSatellite(zone, 'sentinel')}
@@ -627,9 +666,9 @@ function KelpSignalsDashboard() {
                             )}
                             {/* PlanetScope 3m */}
                             {orderResults[`${zone.id}-planetscope`] ? (
-                              <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#22c55e22', color: '#22c55e' }}>
-                                3m ORDERED
-                              </span>
+                              <Link href={orderResults[`${zone.id}-planetscope`].reviewId ? `/admin/satellite-review/${orderResults[`${zone.id}-planetscope`].reviewId}` : '/admin/satellite-review'} style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#22c55e22', color: '#22c55e', textDecoration: 'none' }}>
+                                3m ORDERED →
+                              </Link>
                             ) : (
                               <button
                                 onClick={() => handleOrderSatellite(zone, 'planetscope')}
@@ -646,9 +685,9 @@ function KelpSignalsDashboard() {
                             {/* UP42 Pléiades 50cm — only for score >= 5 */}
                             {zone.score >= 5 && (
                               orderResults[`${zone.id}-up42`] ? (
-                                <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#a855f722', color: '#a855f7' }}>
-                                  50cm ORDERED
-                                </span>
+                                <Link href={orderResults[`${zone.id}-up42`].reviewId ? `/admin/satellite-review/${orderResults[`${zone.id}-up42`].reviewId}` : '/admin/satellite-review'} style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#a855f722', color: '#a855f7', textDecoration: 'none' }}>
+                                  50cm ORDERED →
+                                </Link>
                               ) : (
                                 <button
                                   onClick={() => handleOrderSatellite(zone, 'up42')}

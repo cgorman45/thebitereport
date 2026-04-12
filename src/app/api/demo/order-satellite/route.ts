@@ -47,24 +47,49 @@ export async function POST(req: NextRequest) {
         break;
     }
 
-    // Update boat_stops if ID provided
-    if (boat_stop_id && result.success) {
+    // Persist order to satellite_orders table
+    let satelliteOrderId: string | null = null;
+    if (result.success) {
       try {
         const supabase = createClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.SUPABASE_SERVICE_ROLE_KEY!,
         );
-        await supabase
-          .from('boat_stops')
-          .update({
-            satellite_requested: true,
-            satellite_scene_id: result.scene?.id || tier,
+
+        const { data: orderRow } = await supabase
+          .from('satellite_orders')
+          .insert({
+            zone_id: boat_stop_id || null,
+            lat,
+            lng,
+            tier: result.tier,
+            provider: result.tier_label,
+            scene_id: result.scene?.id,
+            order_id: result.order?.id,
+            status: result.order?.status?.includes('Scene') ? 'placed' : 'processing',
+            resolution: result.scene?.resolution,
+            cloud_cover: result.scene?.cloud_cover,
+            acquired_at: result.scene?.acquired,
           })
-          .eq('id', boat_stop_id);
+          .select('id')
+          .single();
+
+        satelliteOrderId = orderRow?.id || null;
+
+        // Also update boat_stops
+        if (boat_stop_id) {
+          await supabase
+            .from('boat_stops')
+            .update({
+              satellite_requested: true,
+              satellite_scene_id: result.scene?.id || tier,
+            })
+            .eq('id', boat_stop_id);
+        }
       } catch { /* non-critical */ }
     }
 
-    return NextResponse.json({ ...result, location: { lat, lng } });
+    return NextResponse.json({ ...result, satellite_order_id: satelliteOrderId, location: { lat, lng } });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[order-satellite]', msg);
