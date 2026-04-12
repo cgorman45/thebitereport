@@ -73,29 +73,36 @@ export async function GET(request: NextRequest) {
     const end = new Date();
     const start = new Date(end.getTime() - hoursBack * 60 * 60 * 1000);
 
-    // Query vessel_trajectories table
-    let query = supabase
-      .from('vessel_trajectories')
-      .select('mmsi, boat_name, lat, lng, speed, heading, timestamp')
-      .gte('timestamp', start.toISOString())
-      .lte('timestamp', end.toISOString())
-      .order('timestamp', { ascending: true })
-      .limit(10000);
+    // Paginate through all trajectory data (Supabase caps at 1000 rows per query)
+    let allRows: TrajectoryRow[] = [];
+    let page = 0;
+    const PAGE_SIZE = 1000;
+    const MAX_ROWS = 50000; // Safety cap
 
-    if (mmsiFilter) {
-      query = query.eq('mmsi', Number(mmsiFilter));
+    while (allRows.length < MAX_ROWS) {
+      let query = supabase
+        .from('vessel_trajectories')
+        .select('mmsi, boat_name, lat, lng, speed, heading, timestamp')
+        .gte('timestamp', start.toISOString())
+        .lte('timestamp', end.toISOString())
+        .order('timestamp', { ascending: true })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+      if (mmsiFilter) {
+        query = query.eq('mmsi', Number(mmsiFilter));
+      }
+
+      const { data: pageData, error: pageError } = await query;
+      if (pageError || !pageData || pageData.length === 0) break;
+
+      allRows = allRows.concat(pageData as TrajectoryRow[]);
+      if (pageData.length < PAGE_SIZE) break; // Last page
+      page++;
     }
 
-    const { data, error } = await query;
+    const data = allRows;
 
-    if (error) {
-      return NextResponse.json(
-        { error: `Supabase query failed: ${error.message}` },
-        { status: 500 },
-      );
-    }
-
-    const rows = (data || []) as TrajectoryRow[];
+    const rows = data;
 
     // Group rows into snapshots by rounding timestamps to the nearest interval
     const snapshotMap = new Map<string, VesselSnapshot[]>();
