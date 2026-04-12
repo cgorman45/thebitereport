@@ -130,6 +130,18 @@ setInterval(() => {
   }
 }, 30000);
 
+// Watchdog: if no messages for 2 minutes, force reconnect
+setInterval(() => {
+  if (lastMessageTime && Date.now() - lastMessageTime > 120_000 && connectionStatus === 'connected') {
+    console.log('[AIS] Watchdog: No messages for 2 min, forcing reconnect...');
+    try { ws?.close(); } catch { /* ignore */ }
+    ws = null;
+    connecting = false;
+    connectionStatus = 'disconnected';
+    setTimeout(connect, 1000);
+  }
+}, 60_000);
+
 // ---------- Trajectory Archiving ----------
 // Archive current vessel positions to Supabase every 5 minutes for 4D replay
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;

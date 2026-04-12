@@ -8,7 +8,12 @@ import AuthModal from './auth/AuthModal';
 import UserMenu from './auth/UserMenu';
 import { getSupabase } from '@/lib/supabase/client';
 
-const NAV_LINKS = [
+const PRIMARY_LINKS = [
+  { href: '/admin/satellite-view', label: 'Fishing Intelligence' },
+  { href: '/', label: 'Admin' },
+];
+
+const MORE_LINKS = [
   { href: '/bite-report', label: 'Bite Report' },
   { href: '/fleet-tracker', label: 'Fleet Map' },
   { href: '/ocean-data', label: 'Ocean Data' },
@@ -24,6 +29,7 @@ export default function Header() {
   const pathname = usePathname();
   const auth = useOptionalAuth();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!auth?.user) { setIsAdmin(false); return; }
@@ -61,16 +67,17 @@ export default function Header() {
 
         {/* Navigation */}
         <nav className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
-          {NAV_LINKS.map((link) => {
+          {/* Primary links */}
+          {PRIMARY_LINKS.map((link) => {
             const isActive = pathname === link.href;
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200"
+                className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap transition-all duration-200"
                 style={{
                   backgroundColor: isActive ? '#00d4ff18' : 'transparent',
-                  color: isActive ? '#00d4ff' : '#8899aa',
+                  color: isActive ? '#00d4ff' : '#e2e8f0',
                   border: isActive ? '1px solid #00d4ff33' : '1px solid transparent',
                 }}
               >
@@ -78,32 +85,67 @@ export default function Header() {
               </Link>
             );
           })}
-          {auth?.user && (
-            <Link
-              href="/my-boats"
+
+          {/* More dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setMoreOpen(!moreOpen)}
               className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200"
-              style={{
-                backgroundColor: pathname === '/my-boats' ? '#f0c04018' : 'transparent',
-                color: pathname === '/my-boats' ? '#f0c040' : '#f0c040',
-                border: pathname === '/my-boats' ? '1px solid #f0c04033' : '1px solid transparent',
-              }}
+              style={{ color: '#667788', border: '1px solid transparent' }}
             >
-              My Boats
-            </Link>
-          )}
-          {isAdmin && (
-            <Link
-              href="/admin/kelp-review"
-              className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200"
-              style={{
-                backgroundColor: pathname.startsWith('/admin') ? '#ff6b3518' : 'transparent',
-                color: '#ff6b35',
-                border: pathname.startsWith('/admin') ? '1px solid #ff6b3533' : '1px solid transparent',
-              }}
-            >
-              Admin
-            </Link>
-          )}
+              More ▾
+            </button>
+            {moreOpen && (
+              <div
+                className="absolute top-full right-0 mt-1 rounded-lg shadow-xl overflow-hidden z-50"
+                style={{ background: '#131b2e', border: '1px solid #1e2a42', minWidth: 180 }}
+              >
+                {MORE_LINKS.map((link) => {
+                  const isActive = pathname === link.href;
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setMoreOpen(false)}
+                      className="block px-4 py-2 text-xs sm:text-sm font-medium whitespace-nowrap transition-all duration-200"
+                      style={{
+                        backgroundColor: isActive ? '#00d4ff12' : 'transparent',
+                        color: isActive ? '#00d4ff' : '#8899aa',
+                      }}
+                    >
+                      {link.label}
+                    </Link>
+                  );
+                })}
+                {auth?.user && (
+                  <Link
+                    href="/my-boats"
+                    onClick={() => setMoreOpen(false)}
+                    className="block px-4 py-2 text-xs sm:text-sm font-medium"
+                    style={{ color: '#f0c040' }}
+                  >
+                    My Boats
+                  </Link>
+                )}
+                <Link
+                  href="/admin/satellite-review"
+                  onClick={() => setMoreOpen(false)}
+                  className="block px-4 py-2 text-xs sm:text-sm font-medium"
+                  style={{ color: '#a855f7' }}
+                >
+                  Satellite Orders
+                </Link>
+                <Link
+                  href="/admin/kelp-review"
+                  onClick={() => setMoreOpen(false)}
+                  className="block px-4 py-2 text-xs sm:text-sm font-medium"
+                  style={{ color: '#ff6b35' }}
+                >
+                  Kelp Review
+                </Link>
+              </div>
+            )}
+          </div>
         </nav>
 
         {/* Status indicator + Auth */}
