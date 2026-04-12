@@ -377,36 +377,76 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           circlePoints.push(spot.lng + dLng, spot.lat + dLat);
         }
 
-        // Geofence border
+        // Ground-level geofence border (always visible)
         viewer.entities.add({
           id: `geofence-${spot.id}`,
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArray(circlePoints),
             width: isActive ? 3 : 1.5,
-            material: color.withAlpha(isActive ? 0.7 : 0.25),
+            material: color.withAlpha(isActive ? 0.6 : 0.15),
             clampToGround: true,
           },
         });
 
-        // Active count label
-        if (isActive) {
+        // 3D vertical wall rising from ocean — like airspace zones
+        // Shows on hover/selected or when active with boats
+        const isSelected = selectedSpot?.id === spot.id;
+        const wallHeight = isSelected ? 8000 : isActive ? 3000 : 0; // meters
+
+        if (wallHeight > 0) {
+          // Wall uses the same circle points but with height
+          const wallPositions: number[] = [];
+          for (let a = 0; a <= 360; a += 10) {
+            const rad = (a * Math.PI) / 180;
+            const dLat = (radiusM * Math.cos(rad) / (R * 1000)) * (180 / Math.PI);
+            const dLng = (radiusM * Math.sin(rad) / (R * 1000 * Math.cos(spot.lat * Math.PI / 180))) * (180 / Math.PI);
+            wallPositions.push(spot.lng + dLng, spot.lat + dLat);
+          }
+
           viewer.entities.add({
-            id: `geofence-count-${spot.id}`,
-            position: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat + (spot.radiusKm / 111), 100),
-            label: {
-              text: `${boatsInside} boat${boatsInside > 1 ? 's' : ''}`,
-              font: 'bold 11px sans-serif',
-              fillColor: color,
-              outlineColor: Cesium.Color.BLACK,
-              outlineWidth: 2,
-              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-              pixelOffset: new Cesium.Cartesian2(0, -4),
-              distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4e5),
-              scaleByDistance: new Cesium.NearFarScalar(1e3, 1, 3e5, 0.4),
+            id: `geofence-wall-${spot.id}`,
+            wall: {
+              positions: Cesium.Cartesian3.fromDegreesArray(wallPositions),
+              maximumHeights: Array(Math.ceil(360 / 10) + 1).fill(wallHeight),
+              minimumHeights: Array(Math.ceil(360 / 10) + 1).fill(0),
+              material: color.withAlpha(isSelected ? 0.25 : 0.12),
+              outline: true,
+              outlineColor: color.withAlpha(0.5),
+            },
+          });
+
+          // Top ring at wall height
+          viewer.entities.add({
+            id: `geofence-top-${spot.id}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(
+                wallPositions.flatMap((v, i) => i % 2 === 0 ? [v] : [v, wallHeight])
+              ),
+              width: 2,
+              material: color.withAlpha(0.6),
             },
           });
         }
+
+        // Boat count + radius label
+        viewer.entities.add({
+          id: `geofence-count-${spot.id}`,
+          position: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat + (spot.radiusKm / 111), wallHeight + 200),
+          label: {
+            text: isActive
+              ? `${boatsInside} boat${boatsInside > 1 ? 's' : ''} · ${spot.radiusKm}km`
+              : `${spot.radiusKm}km zone`,
+            font: isActive ? 'bold 11px sans-serif' : '10px sans-serif',
+            fillColor: isActive ? color : Cesium.Color.fromCssColorString('#667788'),
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -4),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4e5),
+            scaleByDistance: new Cesium.NearFarScalar(1e3, 1, 3e5, 0.4),
+          },
+        });
       }
     }
 
@@ -1095,6 +1135,22 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             <span>{trajectories[trajIndex]?.vessels.length || 0} vessels</span>
             <span>Now</span>
           </div>
+        </div>
+      )}
+
+      {/* ── Geofence Admin Panel (shows when a spot is selected) ── */}
+      {selectedSpot && (
+        <div style={{
+          position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
+          background: 'rgba(10,15,26,0.95)', backdropFilter: 'blur(12px)',
+          border: `2px solid ${selectedSpot.color}66`, borderRadius: 10,
+          padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 16, fontSize: 12,
+        }}>
+          <span style={{ color: selectedSpot.color, fontWeight: 700 }}>● {selectedSpot.name}</span>
+          <span style={{ color: '#667788' }}>Geofence: <b style={{ color: '#e2e8f0' }}>{selectedSpot.radiusKm}km</b></span>
+          <span style={{ color: '#667788' }}>Center: <b style={{ color: '#e2e8f0' }}>{selectedSpot.lat.toFixed(3)}°N, {Math.abs(selectedSpot.lng).toFixed(3)}°W</b></span>
+          <span style={{ color: '#667788' }}>Type: <b style={{ color: '#e2e8f0' }}>{selectedSpot.type}</b></span>
+          <button onClick={() => setSelectedSpot(null)} style={{ background: 'none', border: 'none', color: '#667788', cursor: 'pointer', fontSize: 14 }}>✕</button>
         </div>
       )}
 
