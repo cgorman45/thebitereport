@@ -122,7 +122,7 @@ export async function searchUP42Scenes(
   const bbox = [lng - delta, lat - delta, lng + delta, lat + delta];
 
   const searchBody = {
-    collections: ['PHR'],
+    collections: ['phr'],
     bbox,
     datetime: `${startDate.toISOString()}/${now.toISOString()}`,
     limit,
@@ -146,11 +146,17 @@ export async function searchUP42Scenes(
   const data = await res.json();
   const features = data.features || [];
 
-  return features.slice(0, limit).map((f: any) => ({
+  // Filter by cloud cover client-side
+  const filtered = features.filter((f: any) => {
+    const cc = f.properties?.cloudCoverage ?? f.properties?.['eo:cloud_cover'] ?? 0;
+    return cc <= maxCloudCover;
+  });
+
+  return filtered.slice(0, limit).map((f: any) => ({
     id: f.properties?.id || f.id,
     acquired: f.properties?.acquisitionDate || f.properties?.datetime || '',
     cloud_cover: f.properties?.cloudCoverage ?? f.properties?.['eo:cloud_cover'] ?? 0,
-    resolution: 0.5, // Pléiades is always 50cm
+    resolution: 0.5,
     constellation: f.properties?.constellation || 'PHR',
     geometry: f.geometry,
   }));
