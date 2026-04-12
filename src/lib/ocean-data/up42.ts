@@ -127,7 +127,7 @@ export async function searchUP42Scenes(
     datetime: `${startDate.toISOString()}/${now.toISOString()}`,
     limit,
     query: {
-      cloudCoverage: { LTE: maxCloudCover },
+      'eo:cloud_cover': { lte: maxCloudCover },
     },
   };
 
