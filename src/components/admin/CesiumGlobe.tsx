@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { FISHING_SPOTS } from '@/lib/ocean-data/fishing-spots';
 import type { FishingSpot } from '@/lib/ocean-data/fishing-spots';
+import { ALL_WAYPOINTS } from '@/lib/ocean-data/baja-directions-waypoints';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface SatPosition {
@@ -65,6 +66,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [selectedSpot, setSelectedSpot] = useState<FishingSpot | null>(null);
 
   // Layers
+  const [showWaypoints, setShowWaypoints] = useState(false); // Off by default — lots of points
   const [showSatellites, setShowSatellites] = useState(false); // Off by default to reduce clutter
   const [showVessels, setShowVessels] = useState(true);
   const [showSpots, setShowSpots] = useState(true);
@@ -249,6 +251,46 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             pixelOffset: new Cesium.Cartesian2(0, -16),
             scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e6, 0.4),
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2e6),
+          },
+        });
+      }
+    }
+
+    // ── Baja Directions Waypoints ──
+    if (showWaypoints) {
+      const chartColors: Record<string, string> = {
+        'sd-offshore': '#eab308',
+        'la-offshore': '#f97316',
+        'channel-islands': '#22c55e',
+        'sd-bay': '#38bdf8',
+      };
+
+      for (const wp of ALL_WAYPOINTS) {
+        const color = Cesium.Color.fromCssColorString(chartColors[wp.chart] || '#eab308');
+
+        viewer.entities.add({
+          id: `wp-${wp.id}`,
+          name: wp.name,
+          description: `<div style="font-family:sans-serif"><p><b>Chart:</b> ${wp.chart}</p><p><b>Type:</b> ${wp.type}</p><p><b>Position:</b> ${wp.lat.toFixed(4)}°N, ${Math.abs(wp.lng).toFixed(4)}°W</p></div>`,
+          position: Cesium.Cartesian3.fromDegrees(wp.lng, wp.lat, 50),
+          point: {
+            pixelSize: 6,
+            color: color.withAlpha(0.7),
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 1,
+            scaleByDistance: new Cesium.NearFarScalar(1e3, 1.2, 1e6, 0.3),
+          },
+          label: {
+            text: wp.name,
+            font: '9px monospace',
+            fillColor: color,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 1,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -10),
+            scaleByDistance: new Cesium.NearFarScalar(1e3, 1, 5e5, 0.3),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3e5),
           },
         });
       }
@@ -515,7 +557,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     } catch (e) {
       console.log('[CesiumGlobe] Entity update error:', e);
     }
-  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, selectedSpot]);
+  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, showWaypoints, selectedSpot]);
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -554,6 +596,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
         {[
           { key: 'spots', label: 'Fishing Spots', state: showSpots, set: setShowSpots, color: '#f97316', count: FISHING_SPOTS.length },
+          { key: 'waypoints', label: 'Chart Waypoints', state: showWaypoints, set: setShowWaypoints, color: '#eab308', count: ALL_WAYPOINTS.length },
           { key: 'vessels', label: 'Live Vessels', state: showVessels, set: setShowVessels, color: '#38bdf8', count: vessels.length },
           { key: 'orders', label: 'Satellite Orders', state: showOrders, set: setShowOrders, color: '#a855f7', count: satOrders.length },
           { key: 'trajectories', label: '48h Replay', state: showTrajectories, set: setShowTrajectories, color: '#00d4ff' },
