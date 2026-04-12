@@ -174,12 +174,15 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     const Cesium = (window as any).Cesium;
     if (!viewerRef.current || !Cesium) return;
     setSelectedSpot(spot);
-    setShowTrajectories(true);
-    viewerRef.current.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat, spot.zoom),
-      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
-      duration: 2,
-    });
+    try {
+      viewerRef.current.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat, spot.zoom),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+        duration: 2,
+      });
+    } catch (e) {
+      console.log('[CesiumGlobe] flyTo error:', e);
+    }
   }, []);
 
   // Reset view
@@ -201,12 +204,13 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     const Cesium = (window as any).Cesium;
     if (!Cesium) return;
 
+    try {
     // Clear dynamic entities
     const toRemove: any[] = [];
     viewer.entities.values.forEach((e: any) => {
       if (e.id && e.id !== 'coverage-area') toRemove.push(e);
     });
-    toRemove.forEach((e: any) => viewer.entities.remove(e));
+    toRemove.forEach((e: any) => { try { viewer.entities.remove(e); } catch { /* skip */ } });
 
     // ── Fishing spots ──
     if (showSpots) {
@@ -432,6 +436,9 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           });
         }
       }
+    }
+    } catch (e) {
+      console.log('[CesiumGlobe] Entity update error:', e);
     }
   }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, selectedSpot]);
 
