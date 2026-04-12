@@ -247,8 +247,8 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'east-butterfly',
     name: 'East Butterfly (267)',
-    // Chart: SE of SCI, ~32°15'N, 118°00'W near San Salvador Knoll
-    lat: 32.240, lng: -118.000,
+    // Exact: 32°18'23.9"N 118°04'04.7"W
+    lat: 32.306639, lng: -118.067972,
     zoom: 45000, radiusKm: 10,
     description: 'Eastern butterfly bank. Larger structure near Blake Knolls and San Salvador Knoll.',
     species: ['Yellowfin Tuna', 'Yellowtail', 'Dorado', 'Wahoo'],
