@@ -1,10 +1,11 @@
 /**
- * Planet Labs API client for searching and ordering PlanetScope imagery.
+ * Planet Labs API client for searching and ordering satellite imagery.
  *
- * Uses the Planet Data API (search) and Orders API (download) to:
- * 1. Search for available PlanetScope scenes at a given lat/lng
- * 2. Order 3m resolution imagery for kelp paddy verification
- * 3. Download and store results for ML training
+ * Supports two tiers:
+ *   - PlanetScope (PSScene): 3m resolution, ~$0.40/km²
+ *   - SkySat (SkySatCollect): 50cm resolution, ~$6-8/km²
+ *
+ * Uses the Planet Data API (search) and Orders API (download).
  *
  * Docs: https://developers.planet.com/quickstart/apis/
  * Auth: API key via PLANET_API_KEY env var
@@ -26,17 +27,21 @@ function authHeaders(): Record<string, string> {
   };
 }
 
+export type ItemType = 'PSScene' | 'SkySatCollect';
+
 export interface SceneResult {
   id: string;
   acquired: string;
   cloud_cover: number;
   pixel_resolution: number;
   satellite_id: string;
+  item_type: ItemType;
   geometry: object;
 }
 
 /**
- * Search for available PlanetScope scenes at a given location.
+ * Search for available scenes at a given location.
+ * Supports PlanetScope (3m) and SkySat (50cm).
  * Returns scenes sorted by date (newest first), filtered by cloud cover.
  */
 export async function searchScenes(
@@ -45,6 +50,7 @@ export async function searchScenes(
   daysBack: number = 14,
   maxCloudCover: number = 0.5,
   limit: number = 10,
+  itemType: ItemType = 'PSScene',
 ): Promise<SceneResult[]> {
   const now = new Date();
   const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
@@ -54,7 +60,7 @@ export async function searchScenes(
   const bbox = [lng - delta, lat - delta, lng + delta, lat + delta];
 
   const searchBody = {
-    item_types: ['PSScene'],
+    item_types: [itemType],
     filter: {
       type: 'AndFilter',
       config: [
@@ -85,8 +91,6 @@ export async function searchScenes(
           field_name: 'cloud_cover',
           config: { lte: maxCloudCover },
         },
-        // Note: removed PermissionFilter — trial accounts may not have
-        // ortho_analytic_4b download permissions. Search all available scenes.
       ],
     },
   };
@@ -112,44 +116,34 @@ export async function searchScenes(
     cloud_cover: f.properties.cloud_cover,
     pixel_resolution: f.properties.pixel_resolution,
     satellite_id: f.properties.satellite_id,
+    item_type: itemType,
     geometry: f.geometry,
   }));
 }
 
 /**
- * Order a PlanetScope scene for download.
- * Clips to a small area around the GPS coordinate to minimize cost.
+ * Order a scene for download.
+ * Supports PlanetScope and SkySat item types.
  */
 export async function orderScene(
   sceneId: string,
   lat: number,
   lng: number,
   name: string = 'kelp-paddy-verification',
+  itemType: ItemType = 'PSScene',
 ): Promise<{ orderId: string; status: string }> {
-  // Clip to ~4km x 4km area around the detection point
-  const delta = 0.02;
-  const clipGeometry = {
-    type: 'Polygon',
-    coordinates: [[
-      [lng - delta, lat - delta],
-      [lng + delta, lat - delta],
-      [lng + delta, lat + delta],
-      [lng - delta, lat + delta],
-      [lng - delta, lat - delta],
-    ]],
-  };
+  // Product bundle differs by item type
+  const productBundle = itemType === 'SkySatCollect' ? 'visual' : 'visual';
 
   const orderBody = {
     name,
     products: [
       {
         item_ids: [sceneId],
-        item_type: 'PSScene',
-        product_bundle: 'visual',
+        item_type: itemType,
+        product_bundle: productBundle,
       },
     ],
-    // Note: clip tool removed — trial accounts don't have permission.
-    // Full scene will be downloaded instead.
   };
 
   const res = await fetch(ORDERS_API, {

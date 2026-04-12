@@ -9,7 +9,7 @@ import UserMenu from './auth/UserMenu';
 import { getSupabase } from '@/lib/supabase/client';
 
 const NAV_LINKS = [
-  { href: '/', label: 'Bite Report' },
+  { href: '/bite-report', label: 'Bite Report' },
   { href: '/fleet-tracker', label: 'Fleet Map' },
   { href: '/ocean-data', label: 'Ocean Data' },
   { href: '/plan-your-trip', label: 'Plan Trip' },
@@ -18,7 +18,6 @@ const NAV_LINKS = [
   { href: '/reports', label: 'Reports' },
   { href: '/local-intel', label: 'Intel' },
   { href: '/tutorials', label: 'Tutorials' },
-  { href: '/demo/kelp-signals', label: 'Demo' },
 ];
 
 export default function Header() {

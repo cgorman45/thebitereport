@@ -144,8 +144,9 @@ export default function KelpSignalsDemo() {
     }
   };
 
-  const handleOrderSatellite = async (zone: ScoredZone) => {
-    setOrdering(prev => new Set(prev).add(zone.id));
+  const handleOrderSatellite = async (zone: ScoredZone, tier: 'sentinel' | 'planetscope' | 'up42' = 'planetscope') => {
+    const key = `${zone.id}-${tier}`;
+    setOrdering(prev => new Set(prev).add(key));
     try {
       const res = await fetch('/api/demo/order-satellite', {
         method: 'POST',
@@ -155,13 +156,14 @@ export default function KelpSignalsDemo() {
           lng: zone.lng,
           boat_stop_id: zone.id,
           score: zone.score,
+          tier,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setOrderResults(prev => ({
           ...prev,
-          [zone.id]: {
+          [key]: {
             scene: data.scene.id,
             orderId: data.order.id,
             status: data.order.status,
@@ -173,7 +175,7 @@ export default function KelpSignalsDemo() {
     } catch (err) {
       alert('Order failed: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
-      setOrdering(prev => { const n = new Set(prev); n.delete(zone.id); return n; });
+      setOrdering(prev => { const n = new Set(prev); n.delete(key); return n; });
     }
   };
 
@@ -218,6 +220,10 @@ export default function KelpSignalsDemo() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  const flyToZone = useCallback((lat: number, lng: number) => {
+    mapRef.current?.flyTo({ center: [lng, lat], zoom: 12, duration: 1500 });
+  }, []);
+
   const meta = data?.meta || { total_stops: 0, scored_zones: 0, high_confidence: 0, medium_confidence: 0, satellite_queued: 0 };
   const zones = data?.zones || [];
   const geojsonData = data ? { type: data.type, features: data.features } : { type: 'FeatureCollection', features: [] };
@@ -231,7 +237,7 @@ export default function KelpSignalsDemo() {
         <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 style={{ color: '#e2e8f0', fontSize: 22, fontWeight: 700, margin: 0 }}>
-              Kelp Paddy Detection — Live Scoring
+              Admin — Kelp Paddy Detection
             </h1>
             <p style={{ color: '#667788', fontSize: 13, marginTop: 4 }}>
               Boats stopping in open ocean trigger 1km geofence circles. Multiple boats = higher kelp paddy probability.
@@ -273,6 +279,43 @@ export default function KelpSignalsDemo() {
             style={{ width: '100%', height: '100%' }}
             mapStyle="mapbox://styles/mapbox/dark-v11"
           >
+            {/* Floating map legend */}
+            <div style={{
+              position: 'absolute', bottom: 30, left: 10, zIndex: 10,
+              background: 'rgba(10, 15, 26, 0.92)', border: '1px solid #1e2a42',
+              borderRadius: 8, padding: '10px 14px', fontSize: 11, lineHeight: 1.9,
+              backdropFilter: 'blur(8px)',
+            }}>
+              <div style={{ fontWeight: 700, color: '#e2e8f0', marginBottom: 4, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Legend</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', background: '#22c55e', border: '2px solid #fff', flexShrink: 0 }} />
+                <span style={{ color: '#cbd5e1' }}>Confirmed kelp paddy</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-block', width: 14, height: 2, borderTop: '2px dashed #00d4ff', flexShrink: 0 }} />
+                <span style={{ color: '#cbd5e1' }}>Predicted drift path</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-flex', width: 14, height: 14, borderRadius: '50%', border: '2px solid #00d4ff', background: '#0a0f1a', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: '#00d4ff', fontWeight: 700, flexShrink: 0 }}>24</span>
+                <span style={{ color: '#cbd5e1' }}>Est. position at 24h / 48h</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-block', width: 14, height: 2, borderTop: '2px solid #22c55e', flexShrink: 0 }} />
+                <span style={{ color: '#cbd5e1' }}>Observed drift history</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingTop: 4, borderTop: '1px solid #1e2a42' }}>
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#ef4444', border: '1px solid #fff', flexShrink: 0 }} />
+                <span style={{ color: '#cbd5e1' }}>Stopped vessel</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#38bdf8', opacity: 0.5, flexShrink: 0 }} />
+                <span style={{ color: '#cbd5e1' }}>Moving vessel</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingTop: 4, borderTop: '1px solid #1e2a42' }}>
+                <span style={{ display: 'inline-block', width: 14, height: 14, borderRadius: '50%', background: '#f9731633', border: '2px solid #f97316', flexShrink: 0 }} />
+                <span style={{ color: '#cbd5e1' }}>1km geofence (scored zone)</span>
+              </div>
+            </div>
             <NavigationControl position="top-right" />
 
             <Source id="kelp-scores" type="geojson" data={geojsonData as GeoJSON.FeatureCollection}>
@@ -347,17 +390,34 @@ export default function KelpSignalsDemo() {
                     'circle-stroke-color': '#ffffff',
                   }}
                 />
-                {/* Drift endpoint — small cyan circle */}
+                {/* Drift time markers — 24h and 48h estimated positions */}
                 <Layer
-                  id="drift-endpoint"
+                  id="drift-time-marker"
                   type="circle"
-                  filter={['==', ['get', 'type'], 'drift-endpoint']}
+                  filter={['==', ['get', 'type'], 'drift-time-marker']}
                   paint={{
-                    'circle-radius': 5,
-                    'circle-color': '#00d4ff',
-                    'circle-opacity': 0.6,
-                    'circle-stroke-width': 1,
+                    'circle-radius': 7,
+                    'circle-color': '#0a0f1a',
+                    'circle-stroke-width': 2,
                     'circle-stroke-color': '#00d4ff',
+                    'circle-opacity': 0.9,
+                  }}
+                />
+                <Layer
+                  id="drift-time-label"
+                  type="symbol"
+                  filter={['==', ['get', 'type'], 'drift-time-marker']}
+                  layout={{
+                    'text-field': ['get', 'label'],
+                    'text-size': 10,
+                    'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+                    'text-allow-overlap': true,
+                    'text-offset': [0, -1.4],
+                  }}
+                  paint={{
+                    'text-color': '#00d4ff',
+                    'text-halo-color': '#0a0f1a',
+                    'text-halo-width': 1.5,
                   }}
                 />
               </Source>
@@ -419,18 +479,33 @@ export default function KelpSignalsDemo() {
                   {zones.map((zone) => (
                     <tr key={zone.id} style={{ borderBottom: '1px solid #1e2a4222' }}>
                       <td style={{ padding: '12px 14px' }}>
-                        <span style={{
-                          display: 'inline-block', width: 36, height: 36, borderRadius: '50%',
-                          background: scoreColor(zone.score) + '22',
-                          border: `2px solid ${scoreColor(zone.score)}`,
-                          textAlign: 'center', lineHeight: '32px',
-                          color: scoreColor(zone.score), fontWeight: 800, fontSize: 16,
-                        }}>
+                        <span
+                          onClick={() => flyToZone(zone.lat, zone.lng)}
+                          style={{
+                            display: 'inline-block', width: 36, height: 36, borderRadius: '50%',
+                            background: scoreColor(zone.score) + '22',
+                            border: `2px solid ${scoreColor(zone.score)}`,
+                            textAlign: 'center', lineHeight: '32px',
+                            color: scoreColor(zone.score), fontWeight: 800, fontSize: 16,
+                            cursor: 'pointer', transition: 'transform 0.15s',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.15)')}
+                          onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+                          title="Fly to location on map"
+                        >
                           {zone.score}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px', color: '#e2e8f0' }}>
-                        {zone.lat.toFixed(4)}°N, {Math.abs(zone.lng).toFixed(4)}°W
+                      <td style={{ padding: '12px 14px' }}>
+                        <span
+                          onClick={() => flyToZone(zone.lat, zone.lng)}
+                          style={{ color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#38bdf844', textUnderlineOffset: 2 }}
+                          onMouseEnter={e => (e.currentTarget.style.textDecorationColor = '#38bdf8')}
+                          onMouseLeave={e => (e.currentTarget.style.textDecorationColor = '#38bdf844')}
+                          title="Fly to location on map"
+                        >
+                          {zone.lat.toFixed(4)}°N, {Math.abs(zone.lng).toFixed(4)}°W
+                        </span>
                       </td>
                       <td style={{ padding: '12px 14px', color: '#e2e8f0' }}>
                         <span style={{ color: '#00d4ff', fontWeight: 600 }}>{zone.boat_count}</span>
@@ -449,22 +524,65 @@ export default function KelpSignalsDemo() {
                         )}
                       </td>
                       <td style={{ padding: '12px 14px' }}>
-                        {orderResults[zone.id] ? (
-                          <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#22c55e22', color: '#22c55e' }}>
-                            ORDERED
-                          </span>
-                        ) : zone.score >= 3 ? (
-                          <button
-                            onClick={() => handleOrderSatellite(zone)}
-                            disabled={ordering.has(zone.id)}
-                            style={{
-                              padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                              background: ordering.has(zone.id) ? '#4a5568' : actionColor(zone.satellite_action),
-                              color: '#fff', border: 'none', cursor: ordering.has(zone.id) ? 'wait' : 'pointer',
-                            }}
-                          >
-                            {ordering.has(zone.id) ? 'Ordering...' : `Order ${actionLabel(zone.satellite_action)}`}
-                          </button>
+                        {zone.score >= 3 ? (
+                          <div style={{ display: 'flex', gap: 3, flexDirection: 'column' }}>
+                            {/* Sentinel-2 10m (free) */}
+                            {orderResults[`${zone.id}-sentinel`] ? (
+                              <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#22c55e22', color: '#22c55e' }}>
+                                10m FOUND
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleOrderSatellite(zone, 'sentinel')}
+                                disabled={ordering.has(`${zone.id}-sentinel`)}
+                                style={{
+                                  padding: '3px 10px', borderRadius: 5, fontSize: 9, fontWeight: 700,
+                                  background: ordering.has(`${zone.id}-sentinel`) ? '#4a5568' : '#0ea5e9',
+                                  color: '#fff', border: 'none', cursor: ordering.has(`${zone.id}-sentinel`) ? 'wait' : 'pointer',
+                                }}
+                              >
+                                {ordering.has(`${zone.id}-sentinel`) ? '...' : '10m Sentinel (free)'}
+                              </button>
+                            )}
+                            {/* PlanetScope 3m */}
+                            {orderResults[`${zone.id}-planetscope`] ? (
+                              <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#22c55e22', color: '#22c55e' }}>
+                                3m ORDERED
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleOrderSatellite(zone, 'planetscope')}
+                                disabled={ordering.has(`${zone.id}-planetscope`)}
+                                style={{
+                                  padding: '3px 10px', borderRadius: 5, fontSize: 9, fontWeight: 700,
+                                  background: ordering.has(`${zone.id}-planetscope`) ? '#4a5568' : actionColor(zone.satellite_action),
+                                  color: '#fff', border: 'none', cursor: ordering.has(`${zone.id}-planetscope`) ? 'wait' : 'pointer',
+                                }}
+                              >
+                                {ordering.has(`${zone.id}-planetscope`) ? '...' : '3m Planet'}
+                              </button>
+                            )}
+                            {/* UP42 Pléiades 50cm — only for score >= 5 */}
+                            {zone.score >= 5 && (
+                              orderResults[`${zone.id}-up42`] ? (
+                                <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 9, fontWeight: 700, background: '#a855f722', color: '#a855f7' }}>
+                                  50cm ORDERED
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleOrderSatellite(zone, 'up42')}
+                                  disabled={ordering.has(`${zone.id}-up42`)}
+                                  style={{
+                                    padding: '3px 10px', borderRadius: 5, fontSize: 9, fontWeight: 700,
+                                    background: ordering.has(`${zone.id}-up42`) ? '#4a5568' : '#a855f7',
+                                    color: '#fff', border: 'none', cursor: ordering.has(`${zone.id}-up42`) ? 'wait' : 'pointer',
+                                  }}
+                                >
+                                  {ordering.has(`${zone.id}-up42`) ? '...' : '50cm Pléiades'}
+                                </button>
+                              )
+                            )}
+                          </div>
                         ) : (
                           <span style={{ color: '#4a5568', fontSize: 11 }}>Score too low</span>
                         )}
