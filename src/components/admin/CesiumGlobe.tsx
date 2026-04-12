@@ -585,22 +585,38 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       )}
 
       {/* ── Search Bar (top center) ── */}
-      <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 20, width: 340, maxWidth: '60%' }}>
-        <div style={{ position: 'relative' }}>
-          <input
-            type="text"
-            placeholder="Search fishing spots..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            onFocus={() => setSearchOpen(true)}
+      <div style={{ position: 'absolute', top: 12, right: 60, zIndex: 20, width: searchOpen ? 260 : 36, transition: 'width 0.3s ease' }}>
+        <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+          {searchOpen ? (
+            <input
+              type="text"
+              placeholder="Search spots..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              autoFocus
+              style={{
+                width: '100%', padding: '7px 12px 7px 30px', borderRadius: 20,
+                background: 'rgba(30,35,50,0.9)', backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255,255,255,0.15)', color: '#fff',
+                fontSize: 12, outline: 'none',
+              }}
+            />
+          ) : null}
+          <button
+            onClick={(e) => { e.stopPropagation(); setSearchOpen(!searchOpen); if (searchOpen) setSearchQuery(''); }}
             style={{
-              width: '100%', padding: '10px 14px 10px 36px', borderRadius: 24,
-              background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255,255,255,0.15)', color: '#fff',
-              fontSize: 13, outline: 'none',
+              position: searchOpen ? 'absolute' : 'relative',
+              left: searchOpen ? 6 : 0, top: searchOpen ? '50%' : 0,
+              transform: searchOpen ? 'translateY(-50%)' : 'none',
+              width: 36, height: 36, borderRadius: '50%',
+              background: searchOpen ? 'transparent' : 'rgba(30,35,50,0.85)',
+              backdropFilter: searchOpen ? 'none' : 'blur(8px)',
+              border: searchOpen ? 'none' : '1px solid rgba(255,255,255,0.12)',
+              color: '#8899aa', fontSize: 14, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: searchOpen ? 'none' : '0 2px 8px rgba(0,0,0,0.4)',
             }}
-          />
-          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#8899aa', fontSize: 14 }}>🔍</span>
+          >🔍</button>
           {searchOpen && searchQuery.length > 0 && (
             <div style={{
               position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
