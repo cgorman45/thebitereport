@@ -448,21 +448,29 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         }
 
         for (const [mmsi, trail] of Object.entries(trails)) {
-          if (trail.coords.length < 2 || !trail.wasMoving) continue; // Skip stationary boats
-          const flat = trail.coords.flatMap(([lng, lat]) => [lng, lat]);
+          if (trail.coords.length < 2 || !trail.wasMoving) continue;
 
-          // Red for live/recent, yellow for historical replay
+          // Dissipating tail: draw multiple segments with decreasing opacity
           const trailColor = isNearLive ? '#ef4444' : '#eab308';
+          const segments = trail.coords.length - 1;
 
-          viewer.entities.add({
-            id: `traj-trail-${mmsi}`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArray(flat),
-              width: 2,
-              material: Cesium.Color.fromCssColorString(trailColor).withAlpha(0.6),
-              clampToGround: true,
-            },
-          });
+          for (let s = 0; s < segments; s++) {
+            const opacity = 0.1 + (s / segments) * 0.6; // Fade from 0.1 (old) to 0.7 (recent)
+            const width = 1 + (s / segments) * 2; // Thinner tail, thicker near head
+
+            viewer.entities.add({
+              id: `traj-trail-${mmsi}-${s}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArray([
+                  trail.coords[s][0], trail.coords[s][1],
+                  trail.coords[s + 1][0], trail.coords[s + 1][1],
+                ]),
+                width,
+                material: Cesium.Color.fromCssColorString(trailColor).withAlpha(opacity),
+                clampToGround: true,
+              },
+            });
+          }
         }
       }
     }
