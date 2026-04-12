@@ -402,33 +402,53 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           }
         }
 
-        // Ground-level geofence border — very transparent
+        // Ground-level geofence border — very transparent, thin line
         viewer.entities.add({
           id: `geofence-${spot.id}`,
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
-            width: isActive ? 2.5 : 1,
-            material: color.withAlpha(isActive ? 0.45 : 0.1),
+            width: isActive ? 2 : 0.8,
+            material: color.withAlpha(isActive ? 0.35 : 0.08),
             clampToGround: true,
           },
         });
 
-        // 3D vertical wall rising from ocean — like airspace zones
+        // 3D extruded transparent wall — rises from ocean like airspace zones
         const isSelected = selectedSpot?.id === spot.id;
-        const wallHeight = isSelected ? 5000 : isActive ? 2000 : 0;
+        if (isSelected || isActive) {
+          const wallHeight = isSelected ? 4000 : 1500;
 
-        if (wallHeight > 0) {
-          const wallCount = geofencePoints.length / 2;
+          // Use polygon with extrudedHeight for true 3D transparent volume
+          // Convert flat [lng, lat, lng, lat...] to hierarchy
+          const polyPositions = [];
+          for (let pi = 0; pi < geofencePoints.length; pi += 2) {
+            polyPositions.push(Cesium.Cartesian3.fromDegrees(geofencePoints[pi], geofencePoints[pi + 1]));
+          }
 
+          // Semi-transparent filled polygon on the surface
           viewer.entities.add({
-            id: `geofence-wall-${spot.id}`,
-            wall: {
-              positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
-              maximumHeights: Array(wallCount).fill(wallHeight),
-              minimumHeights: Array(wallCount).fill(0),
-              material: color.withAlpha(isSelected ? 0.15 : 0.06),
+            id: `geofence-fill-${spot.id}`,
+            polygon: {
+              hierarchy: new Cesium.PolygonHierarchy(polyPositions),
+              height: 0,
+              extrudedHeight: wallHeight,
+              material: color.withAlpha(isSelected ? 0.08 : 0.04),
               outline: true,
-              outlineColor: color.withAlpha(0.3),
+              outlineColor: color.withAlpha(isSelected ? 0.4 : 0.2),
+            },
+          });
+
+          // Top cap outline at wall height
+          viewer.entities.add({
+            id: `geofence-top-${spot.id}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(
+                geofencePoints.flatMap((v: number, i: number) =>
+                  i % 2 === 0 ? [v] : [v, wallHeight]
+                )
+              ),
+              width: 1.5,
+              material: color.withAlpha(0.3),
             },
           });
         }
@@ -436,7 +456,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         // Boat count + radius label
         viewer.entities.add({
           id: `geofence-count-${spot.id}`,
-          position: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat + (spot.radiusKm / 111), wallHeight + 200),
+          position: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat + (spot.radiusKm / 111), 500),
           label: {
             text: isActive
               ? `${boatsInside} boat${boatsInside > 1 ? 's' : ''} · ${spot.radiusKm}km`

@@ -227,41 +227,41 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'west-butterfly',
     name: 'West Butterfly (162)',
-    // Chart: ~32°22'N, 118°22'W — NW of Blake Knolls/East Cortes Bank
-    lat: 32.367, lng: -118.367,
-    zoom: 40000, radiusKm: 8,
-    description: 'Western butterfly bank. Deep structure that holds yellowtail and tuna. Part of the butterfly complex.',
+    // Chart: south of SCI, ~32°17'N, 118°28'W
+    lat: 32.280, lng: -118.470,
+    zoom: 45000, radiusKm: 8,
+    description: 'Western butterfly bank south of San Clemente Island. Deep structure holding yellowtail and tuna.',
     species: ['Yellowtail', 'Yellowfin Tuna', 'Dorado'],
     depth: '400-1200ft',
     type: 'bank',
     color: '#22c55e',
-    // Butterfly-wing shape from chart contour — irregular, wider on south
+    // Butterfly-wing contour — south of SCI
     polygon: [
-      [-118.42, 32.400], [-118.38, 32.410], [-118.34, 32.405],
-      [-118.30, 32.390], [-118.28, 32.370], [-118.27, 32.350],
-      [-118.28, 32.330], [-118.30, 32.315], [-118.33, 32.310],
-      [-118.37, 32.315], [-118.40, 32.325], [-118.42, 32.340],
-      [-118.43, 32.360], [-118.43, 32.380], [-118.42, 32.400],
+      [-118.53, 32.320], [-118.49, 32.330], [-118.45, 32.320],
+      [-118.42, 32.305], [-118.40, 32.285], [-118.39, 32.265],
+      [-118.40, 32.245], [-118.42, 32.230], [-118.46, 32.225],
+      [-118.50, 32.230], [-118.53, 32.245], [-118.55, 32.265],
+      [-118.55, 32.290], [-118.53, 32.320],
     ],
   },
   {
     id: 'east-butterfly',
     name: 'East Butterfly (267)',
-    // Chart: ~32°18'N, 118°05'W — just west of San Salvador Knoll
-    lat: 32.300, lng: -118.083,
-    zoom: 40000, radiusKm: 10,
-    description: 'Eastern butterfly bank. Larger of the two. Good tuna and yellowtail grounds near Blake Knolls.',
+    // Chart: SE of SCI, ~32°15'N, 118°00'W near San Salvador Knoll
+    lat: 32.240, lng: -118.000,
+    zoom: 45000, radiusKm: 10,
+    description: 'Eastern butterfly bank. Larger structure near Blake Knolls and San Salvador Knoll.',
     species: ['Yellowfin Tuna', 'Yellowtail', 'Dorado', 'Wahoo'],
     depth: '300-1000ft',
     type: 'bank',
     color: '#22c55e',
-    // Larger butterfly-wing from chart contour — extends toward San Salvador Knoll
+    // Wider butterfly-wing contour — near San Salvador Knoll
     polygon: [
-      [-118.15, 32.350], [-118.10, 32.360], [-118.04, 32.350],
-      [-118.00, 32.335], [-117.97, 32.310], [-117.96, 32.290],
-      [-117.97, 32.265], [-118.00, 32.245], [-118.04, 32.235],
-      [-118.08, 32.240], [-118.12, 32.250], [-118.15, 32.270],
-      [-118.17, 32.295], [-118.17, 32.320], [-118.15, 32.350],
+      [-118.08, 32.300], [-118.03, 32.310], [-117.97, 32.300],
+      [-117.93, 32.280], [-117.90, 32.260], [-117.89, 32.235],
+      [-117.90, 32.210], [-117.93, 32.190], [-117.97, 32.180],
+      [-118.02, 32.180], [-118.06, 32.190], [-118.09, 32.210],
+      [-118.10, 32.240], [-118.10, 32.270], [-118.08, 32.300],
     ],
   },
   {
