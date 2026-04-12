@@ -583,7 +583,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
       {/* ── Fishing Spots Quick Access (bottom) ── */}
       {showSpots && (
-        <div style={{ position: 'absolute', bottom: showTrajectories ? 70 : 10, left: 10, right: showTrajectories ? 10 : 'auto', zIndex: 10, display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: showTrajectories ? '100%' : 600 }}>
+        <div style={{ position: 'absolute', bottom: showTrajectories ? 110 : 50, left: 10, right: showTrajectories ? 10 : 'auto', zIndex: 10, display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: showTrajectories ? '100%' : 600 }}>
           {FISHING_SPOTS.map(spot => (
             <button key={spot.id} onClick={() => flyToSpot(spot)} style={{
               padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
@@ -600,7 +600,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
       {/* ── Time Scrubber (for trajectory replay) ── */}
       {showTrajectories && trajectories.length > 0 && (
-        <div style={{ position: 'absolute', bottom: 10, left: 10, right: 10, zIndex: 10, background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)', border: '1px solid #1e2a42', borderRadius: 8, padding: '8px 14px' }}>
+        <div style={{ position: 'absolute', bottom: 50, left: 10, right: 10, zIndex: 10, background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)', border: '1px solid #1e2a42', borderRadius: 8, padding: '8px 14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={() => setTrajPlaying(p => !p)} style={{ background: 'none', border: 'none', color: '#00d4ff', fontSize: 16, cursor: 'pointer', padding: 0 }}>
               {trajPlaying ? '⏸' : '▶'}
