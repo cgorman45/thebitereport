@@ -104,9 +104,34 @@ function interpolateAngle(a: number, b: number, t: number): number {
   return (a + diff * t + 360) % 360;
 }
 
+// Known port/harbor locations — vessels near these are parked, not fishing
+const HARBORS = [
+  { lat: 32.715, lng: -117.175, radiusKm: 3, name: 'San Diego Harbor' },
+  { lat: 32.755, lng: -117.235, name: 'Mission Bay', radiusKm: 2 },
+  { lat: 32.850, lng: -117.255, name: 'La Jolla Shore', radiusKm: 1 },
+  { lat: 33.460, lng: -117.620, name: 'Dana Point', radiusKm: 1.5 },
+  { lat: 33.750, lng: -118.280, name: 'Long Beach/LA Harbor', radiusKm: 5 },
+  { lat: 33.600, lng: -117.900, name: 'Newport/Huntington', radiusKm: 2 },
+  { lat: 33.725, lng: -118.270, name: 'San Pedro', radiusKm: 3 },
+  { lat: 33.210, lng: -117.395, name: 'Oceanside Harbor', radiusKm: 1.5 },
+  { lat: 34.410, lng: -119.690, name: 'Santa Barbara', radiusKm: 2 },
+  { lat: 34.170, lng: -119.225, name: 'Ventura Harbor', radiusKm: 1.5 },
+  { lat: 33.340, lng: -118.330, name: 'Avalon/Catalina', radiusKm: 1 },
+  { lat: 31.870, lng: -116.625, name: 'Ensenada Harbor', radiusKm: 2 },
+  { lat: 32.430, lng: -117.245, name: 'Coronado Cays', radiusKm: 1 },
+];
+
+function isInHarbor(lat: number, lng: number): boolean {
+  for (const h of HARBORS) {
+    if (distKm(lat, lng, h.lat, h.lng) < h.radiusKm) return true;
+  }
+  return false;
+}
+
 /**
  * Detect convergence hotspots in a sequence of snapshots.
  * Finds locations where 3+ vessels stop/slow within 1km of each other.
+ * Excludes harbor/port areas — only detects open ocean convergence.
  */
 export function detectHotspots(
   snapshots: Snapshot[],
@@ -122,8 +147,8 @@ export function detectHotspots(
 
   for (let i = 0; i < snapshots.length; i++) {
     const snap = snapshots[i];
-    // Find slow/stopped vessels
-    const slowVessels = snap.vessels.filter(v => v.speed < minSpeedKts);
+    // Find slow/stopped vessels that are NOT in a harbor
+    const slowVessels = snap.vessels.filter(v => v.speed < minSpeedKts && !isInHarbor(v.lat, v.lng));
 
     // Cluster slow vessels within radius
     const assigned = new Set<number>();
@@ -203,7 +228,10 @@ export function detectHotspots(
     });
   }
 
-  return hotspots.sort((a, b) => b.score - a.score);
+  // Final filter: remove any hotspot centroid that's still in a harbor
+  return hotspots
+    .filter(hs => !isInHarbor(hs.lat, hs.lng))
+    .sort((a, b) => b.score - a.score);
 }
 
 /**
