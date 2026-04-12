@@ -69,7 +69,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [showVessels, setShowVessels] = useState(true);
   const [showSpots, setShowSpots] = useState(true);
   const [showOrders, setShowOrders] = useState(true);
-  const [showTrajectories, setShowTrajectories] = useState(false);
+  const [showTrajectories, setShowTrajectories] = useState(true); // On by default — show boat history
 
   // Initialize CesiumJS
   useEffect(() => {
@@ -247,12 +247,42 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     }
 
     // ── Live vessels ──
-    if (showVessels && !showTrajectories) {
+    // Parked boats (stopped >2hrs) get tiny gray dots — nobody cares about parked boats
+    // Active/fishing boats get prominent dots
+    // Moving boats get medium dots with speed-based color
+    if (showVessels && !(showTrajectories && trajPlaying)) {
+      // Show live vessels unless trajectory is actively playing
       for (let i = 0; i < vessels.length; i++) {
         const v = vessels[i];
         const [lng, lat] = v.geometry.coordinates;
         const isStopped = v.properties.status === 'stopped';
         const isSlow = v.properties.status === 'slow';
+        const ageSec = v.properties.age_sec || 0;
+        const isParked = isStopped && ageSec > 7200; // >2 hours = parked, minimize
+
+        let pixelSize = 5;
+        let color;
+        let outlineWidth = 0;
+
+        if (isParked) {
+          // Parked >2hrs: tiny gray dot, almost invisible
+          pixelSize = 2;
+          color = Cesium.Color.fromCssColorString('#4a5568').withAlpha(0.2);
+        } else if (isStopped) {
+          // Recently stopped: notable but not dominant
+          pixelSize = 5;
+          color = Cesium.Color.fromCssColorString('#f97316');
+          outlineWidth = 1;
+        } else if (isSlow) {
+          // Slow/fishing: prominent — this is what we care about
+          pixelSize = 6;
+          color = Cesium.Color.fromCssColorString('#eab308');
+          outlineWidth = 1;
+        } else {
+          // Transit: medium blue
+          pixelSize = 4;
+          color = Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.5);
+        }
 
         viewer.entities.add({
           id: `vessel-${i}`,
@@ -260,60 +290,97 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           description: `<div style="font-family:sans-serif"><p><b>Speed:</b> ${v.properties.speed?.toFixed(1) || 0} kts</p><p><b>Status:</b> ${v.properties.status}</p></div>`,
           position: Cesium.Cartesian3.fromDegrees(lng, lat, 0),
           point: {
-            pixelSize: isStopped ? 7 : isSlow ? 5 : 3,
-            color: isStopped
-              ? Cesium.Color.fromCssColorString('#ef4444')
-              : isSlow
-                ? Cesium.Color.fromCssColorString('#eab308')
-                : Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.3),
-            outlineColor: Cesium.Color.WHITE.withAlpha(isStopped ? 0.5 : 0),
-            outlineWidth: isStopped ? 1 : 0,
+            pixelSize,
+            color,
+            outlineColor: Cesium.Color.WHITE.withAlpha(outlineWidth > 0 ? 0.4 : 0),
+            outlineWidth,
           },
         });
       }
     }
 
     // ── Trajectory replay vessels ──
+    // Shows boat positions at the current time index with trails showing where they've been
+    // Red trail = recent/live movement, Yellow trail = older history
+    // Parked boats (speed 0 for extended periods) get minimized
     if (showTrajectories && trajectories.length > 0) {
       const snap = trajectories[Math.min(trajIndex, trajectories.length - 1)];
+      const isNearLive = trajIndex >= trajectories.length - 5; // Within last 5 snapshots = "live"
+
       if (snap) {
         for (const v of snap.vessels) {
           const isStopped = v.speed < 1.5;
+          const isFishing = v.speed >= 0.5 && v.speed < 3;
+
+          // Check if this vessel has been stationary for a long time
+          let stationaryCount = 0;
+          for (let i = Math.max(0, trajIndex - 12); i <= trajIndex; i++) {
+            const s = trajectories[i];
+            const vInSnap = s?.vessels.find((x: any) => x.mmsi === v.mmsi);
+            if (vInSnap && vInSnap.speed < 0.5) stationaryCount++;
+          }
+          const isParked = stationaryCount > 10; // Parked for >10 snapshots (~100min)
+
+          let pixelSize = 5;
+          let color;
+
+          if (isParked) {
+            pixelSize = 2;
+            color = Cesium.Color.fromCssColorString('#4a5568').withAlpha(0.15);
+          } else if (isFishing) {
+            pixelSize = 7;
+            color = Cesium.Color.fromCssColorString('#eab308'); // Yellow = fishing
+          } else if (isStopped) {
+            pixelSize = 4;
+            color = Cesium.Color.fromCssColorString('#f97316').withAlpha(0.6);
+          } else {
+            pixelSize = 5;
+            color = Cesium.Color.fromCssColorString('#38bdf8');
+          }
+
           viewer.entities.add({
             id: `traj-vessel-${v.mmsi}`,
             name: v.name,
+            description: `<div><b>Speed:</b> ${v.speed.toFixed(1)} kts</div>`,
             position: Cesium.Cartesian3.fromDegrees(v.lng, v.lat, 0),
             point: {
-              pixelSize: isStopped ? 7 : 5,
-              color: isStopped
-                ? Cesium.Color.fromCssColorString('#ef4444')
-                : Cesium.Color.fromCssColorString('#38bdf8'),
-              outlineColor: Cesium.Color.WHITE.withAlpha(0.5),
-              outlineWidth: 1,
+              pixelSize,
+              color,
+              outlineColor: Cesium.Color.WHITE.withAlpha(isParked ? 0 : 0.4),
+              outlineWidth: isParked ? 0 : 1,
             },
           });
         }
 
-        // Vessel trails (last 10 snapshots)
-        const trailStart = Math.max(0, trajIndex - 10);
-        const trails: Record<number, [number, number][]> = {};
+        // Vessel trails — show where boats have been
+        // Red trail for recent/live, yellow for historical
+        const trailLength = 15; // Show last 15 snapshots (~2.5hrs at 10min intervals)
+        const trailStart = Math.max(0, trajIndex - trailLength);
+        const trails: Record<number, { coords: [number, number][]; wasMoving: boolean }> = {};
+
         for (let i = trailStart; i <= trajIndex; i++) {
           const s = trajectories[i];
           if (!s) continue;
           for (const v of s.vessels) {
-            if (!trails[v.mmsi]) trails[v.mmsi] = [];
-            trails[v.mmsi].push([v.lng, v.lat]);
+            if (!trails[v.mmsi]) trails[v.mmsi] = { coords: [], wasMoving: false };
+            trails[v.mmsi].coords.push([v.lng, v.lat]);
+            if (v.speed > 1.5) trails[v.mmsi].wasMoving = true;
           }
         }
-        for (const [mmsi, coords] of Object.entries(trails)) {
-          if (coords.length < 2) continue;
-          const flat = coords.flatMap(([lng, lat]) => [lng, lat]);
+
+        for (const [mmsi, trail] of Object.entries(trails)) {
+          if (trail.coords.length < 2 || !trail.wasMoving) continue; // Skip stationary boats
+          const flat = trail.coords.flatMap(([lng, lat]) => [lng, lat]);
+
+          // Red for live/recent, yellow for historical replay
+          const trailColor = isNearLive ? '#ef4444' : '#eab308';
+
           viewer.entities.add({
             id: `traj-trail-${mmsi}`,
             polyline: {
               positions: Cesium.Cartesian3.fromDegreesArray(flat),
-              width: 1.5,
-              material: Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.4),
+              width: 2,
+              material: Cesium.Color.fromCssColorString(trailColor).withAlpha(0.6),
               clampToGround: true,
             },
           });
