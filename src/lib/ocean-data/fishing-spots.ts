@@ -17,11 +17,11 @@ export interface FishingSpot {
 }
 
 export const FISHING_SPOTS: FishingSpot[] = [
-  // San Diego / Point Loma area
+  // San Diego offshore
   {
     id: 'nine-mile-bank',
     name: 'Nine Mile Bank',
-    lat: 32.52, lng: -117.38,
+    lat: 32.633, lng: -117.433,
     zoom: 50000,
     description: 'Premier offshore kelp paddy zone. Yellowtail, dorado, and tuna congregate around floating kelp.',
     species: ['Yellowtail', 'Dorado', 'Yellowfin Tuna', 'Bluefin Tuna'],
@@ -32,7 +32,7 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'coronado-islands',
     name: 'Coronado Islands',
-    lat: 32.42, lng: -117.25,
+    lat: 32.441, lng: -117.298,
     zoom: 40000,
     description: 'Mexican islands just south of the border. World-class yellowtail fishing on the weather side.',
     species: ['Yellowtail', 'Bonito', 'Barracuda', 'White Seabass'],
@@ -43,8 +43,8 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'la-jolla-kelp',
     name: 'La Jolla Kelp Beds',
-    lat: 32.87, lng: -117.30,
-    zoom: 30000,
+    lat: 32.850, lng: -117.290,
+    zoom: 25000,
     description: 'Thick kelp forests close to shore. Calico bass, sheephead, and yellowtail along the edges.',
     species: ['Calico Bass', 'Sheephead', 'Yellowtail', 'White Seabass'],
     depth: '30-90ft',
@@ -54,8 +54,8 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'point-loma-kelp',
     name: 'Point Loma Kelp',
-    lat: 32.70, lng: -117.26,
-    zoom: 30000,
+    lat: 32.667, lng: -117.268,
+    zoom: 25000,
     description: 'Extensive kelp beds off Point Loma. Prime calico bass territory with occasional yellowtail.',
     species: ['Calico Bass', 'Sand Bass', 'Sheephead', 'Lobster'],
     depth: '30-120ft',
@@ -66,7 +66,7 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'catalina-island',
     name: 'Catalina Island',
-    lat: 33.38, lng: -118.42,
+    lat: 33.387, lng: -118.416,
     zoom: 80000,
     description: 'Iconic SoCal island. Yellowtail at the east end, calico bass all around, white seabass in spring.',
     species: ['Yellowtail', 'Calico Bass', 'White Seabass', 'Barracuda'],
@@ -77,7 +77,7 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'san-clemente-island',
     name: 'San Clemente Island',
-    lat: 32.90, lng: -118.50,
+    lat: 32.919, lng: -118.509,
     zoom: 80000,
     description: 'Navy-controlled island with incredible fishing. Yellowtail schools on the lee side.',
     species: ['Yellowtail', 'Bluefin Tuna', 'White Seabass', 'Calico Bass'],
@@ -88,9 +88,9 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'tanner-bank',
     name: 'Tanner/Cortes Bank',
-    lat: 32.47, lng: -119.17,
-    zoom: 80000,
-    description: 'Deep offshore seamount. Giant bluefin tuna, yellowtail, and sometimes marlin.',
+    lat: 32.700, lng: -119.133,
+    zoom: 100000,
+    description: 'Deep offshore seamounts ~60mi out. Giant bluefin tuna, yellowtail, and sometimes marlin.',
     species: ['Bluefin Tuna', 'Yellowfin Tuna', 'Yellowtail'],
     depth: '600-3000ft',
     type: 'bank',
@@ -100,7 +100,7 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'ensenada-corridor',
     name: 'Ensenada Corridor',
-    lat: 31.85, lng: -117.00,
+    lat: 31.830, lng: -116.680,
     zoom: 60000,
     description: 'Rich waters off Ensenada. Yellowtail and bonito near the coast, tuna further out.',
     species: ['Yellowtail', 'Bonito', 'Dorado', 'Yellowfin Tuna'],
@@ -111,7 +111,7 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'san-quintin',
     name: 'San Quintin',
-    lat: 30.48, lng: -115.95,
+    lat: 30.560, lng: -116.000,
     zoom: 60000,
     description: 'Remote Baja fishing. Albacore and yellowfin tuna, plus lingcod near shore.',
     species: ['Albacore', 'Yellowfin Tuna', 'Lingcod', 'Yellowtail'],
@@ -122,9 +122,9 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'isla-guadalupe',
     name: 'Isla Guadalupe',
-    lat: 29.03, lng: -118.27,
+    lat: 29.050, lng: -118.278,
     zoom: 100000,
-    description: 'Remote volcanic island. Famous for great white shark diving. Yellowfin tuna and wahoo.',
+    description: 'Remote volcanic island ~150mi offshore. Famous for great white shark diving. Yellowfin tuna and wahoo.',
     species: ['Yellowfin Tuna', 'Wahoo', 'Dorado'],
     depth: '600-3000ft',
     type: 'island',
@@ -133,7 +133,7 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'isla-cedros',
     name: 'Isla Cedros',
-    lat: 28.17, lng: -115.20,
+    lat: 28.115, lng: -115.175,
     zoom: 80000,
     description: 'Baja island with rich upwelling. Yellowtail, calico bass, and white seabass.',
     species: ['Yellowtail', 'Calico Bass', 'White Seabass'],
@@ -141,13 +141,13 @@ export const FISHING_SPOTS: FishingSpot[] = [
     type: 'island',
     color: '#a855f7',
   },
-  // Offshore banks
+  // Offshore banks / open water
   {
     id: '209-spot',
     name: '209 / 277 Spot',
-    lat: 32.60, lng: -117.50,
+    lat: 32.550, lng: -117.550,
     zoom: 50000,
-    description: 'Traditional offshore numbers. Kelp paddies concentrate bait and gamefish.',
+    description: 'Traditional offshore numbers southwest of Point Loma. Kelp paddies concentrate bait and gamefish.',
     species: ['Yellowfin Tuna', 'Dorado', 'Yellowtail'],
     depth: '400-800ft',
     type: 'open',
@@ -156,7 +156,7 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'hidden-bank',
     name: 'Hidden Bank',
-    lat: 32.30, lng: -117.70,
+    lat: 32.350, lng: -117.650,
     zoom: 50000,
     description: 'Subsurface structure that holds bait. Good kelp paddy zone for yellowtail and dorado.',
     species: ['Yellowtail', 'Dorado', 'Skipjack'],
