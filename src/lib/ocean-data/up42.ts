@@ -126,9 +126,6 @@ export async function searchUP42Scenes(
     bbox,
     datetime: `${startDate.toISOString()}/${now.toISOString()}`,
     limit,
-    query: {
-      'eo:cloud_cover': { lte: maxCloudCover },
-    },
   };
 
   // UP42 catalog search endpoint
