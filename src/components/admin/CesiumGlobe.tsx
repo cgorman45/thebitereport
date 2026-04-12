@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { FISHING_SPOTS } from '@/lib/ocean-data/fishing-spots';
 import type { FishingSpot } from '@/lib/ocean-data/fishing-spots';
 import { ALL_WAYPOINTS } from '@/lib/ocean-data/baja-directions-waypoints';
+import { detectHotspots, generateReplayNarration } from '@/lib/ocean-data/replay-engine';
+import type { Hotspot } from '@/lib/ocean-data/replay-engine';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface SatPosition {
@@ -73,6 +75,10 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [trajIndex, setTrajIndex] = useState(0);
   const [trajPlaying, setTrajPlaying] = useState(false);
   const [selectedSpot, setSelectedSpot] = useState<FishingSpot | null>(null);
+  const [hotspots, setHotspots] = useState<Hotspot[]>([]);
+  const [replayNarration, setReplayNarration] = useState<string[]>([]);
+  const [showHotspots, setShowHotspots] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   // Layers
   const [searchQuery, setSearchQuery] = useState('');
@@ -176,7 +182,18 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         if (satRes.ok) setSatData(await satRes.json());
         if (vesRes.ok) { const d = await vesRes.json(); setVessels(d.features || []); }
         if (ordRes?.ok) { const d = await ordRes.json(); setSatOrders(d.orders || []); }
-        if (trajRes?.ok) { const d = await trajRes.json(); setTrajectories(d.snapshots || []); setTrajIndex(d.snapshots?.length - 1 || 0); }
+        if (trajRes?.ok) {
+          const d = await trajRes.json();
+          const snaps = d.snapshots || [];
+          setTrajectories(snaps);
+          setTrajIndex(snaps.length - 1 || 0);
+          // Run AI hotspot detection
+          if (snaps.length > 2) {
+            const hs = detectHotspots(snaps, 1.5, 3, 3);
+            setHotspots(hs);
+            setReplayNarration(generateReplayNarration(snaps, hs));
+          }
+        }
       } catch { /* ignore */ }
     };
     fetchAll();
@@ -195,8 +212,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       const dt = now - lastTime;
       lastTime = now;
 
-      // Advance progress — each snapshot takes ~120ms (speed adjustable)
-      const speed = 0.008 * dt; // ~8 snapshots per second at 60fps
+      // Advance progress — speed adjustable via playbackSpeed state
+      const speed = 0.004 * dt * playbackSpeed; // Base ~4 snapshots/sec at 1x
       trajProgressRef.current += speed;
 
       if (trajProgressRef.current >= 1) {
@@ -239,7 +256,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
     animId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animId);
-  }, [trajPlaying, trajectories, trajIndex]);
+  }, [trajPlaying, trajectories, trajIndex, playbackSpeed]);
 
   // Fly to fishing spot
   const flyToSpot = useCallback((spot: FishingSpot) => {
@@ -577,6 +594,59 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       }
     }
 
+    // ── AI-Detected Hotspots ──
+    if (showHotspots && hotspots.length > 0) {
+      for (const hs of hotspots) {
+        const color = hs.score >= 7 ? '#ef4444' : hs.score >= 4 ? '#eab308' : '#667788';
+        const pulseSize = 800 + hs.score * 200; // Larger pulse for higher scores
+
+        // Pulsing ring on ground
+        const ringPoints: number[] = [];
+        for (let a = 0; a <= 360; a += 10) {
+          const rad = (a * Math.PI) / 180;
+          const R = 6371000;
+          const dLat = (pulseSize * Math.cos(rad) / R) * (180 / Math.PI);
+          const dLng = (pulseSize * Math.sin(rad) / (R * Math.cos(hs.lat * Math.PI / 180))) * (180 / Math.PI);
+          ringPoints.push(hs.lng + dLng, hs.lat + dLat);
+        }
+
+        viewer.entities.add({
+          id: `hotspot-ring-${hs.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(ringPoints),
+            width: 3,
+            material: Cesium.Color.fromCssColorString(color).withAlpha(0.6),
+            clampToGround: true,
+          },
+        });
+
+        // Center marker
+        viewer.entities.add({
+          id: `hotspot-${hs.id}`,
+          name: `⚠ Hotspot: ${hs.boatCount} vessels`,
+          description: `<div style="font-family:sans-serif;max-width:300px"><p>${hs.narrative}</p><p><b>Duration:</b> ${Math.round(hs.durationMinutes)} min</p><p><b>Vessels:</b> ${hs.vessels.map(v => v.name).join(', ')}</p></div>`,
+          position: Cesium.Cartesian3.fromDegrees(hs.lng, hs.lat, 200),
+          point: {
+            pixelSize: 12,
+            color: Cesium.Color.fromCssColorString(color),
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2,
+          },
+          label: {
+            text: `⚠ ${hs.boatCount} boats · ${hs.score}/10`,
+            font: 'bold 11px sans-serif',
+            fillColor: Cesium.Color.fromCssColorString(color),
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -16),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3e5),
+          },
+        });
+      }
+    }
+
     // ── Satellites ──
     if (showSatellites && satData) {
       for (const sat of satData.positions) {
@@ -642,7 +712,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     } catch (e) {
       console.log('[CesiumGlobe] Entity update error:', e);
     }
-  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, showWaypoints, selectedSpot]);
+  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, showWaypoints, showHotspots, hotspots, selectedSpot]);
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -855,6 +925,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           { key: 'spots', label: 'Fishing Spots', state: showSpots, set: setShowSpots, color: '#f97316', count: FISHING_SPOTS.length },
           { key: 'waypoints', label: 'Chart Waypoints', state: showWaypoints, set: setShowWaypoints, color: '#eab308', count: ALL_WAYPOINTS.length },
           { key: 'vessels', label: 'Live Vessels', state: showVessels, set: setShowVessels, color: '#38bdf8', count: vessels.length },
+          { key: 'hotspots', label: 'AI Hotspots', state: showHotspots, set: setShowHotspots, color: '#ef4444', count: hotspots.length },
           { key: 'orders', label: 'Satellite Orders', state: showOrders, set: setShowOrders, color: '#a855f7', count: satOrders.length },
           { key: 'trajectories', label: '48h Replay', state: showTrajectories, set: setShowTrajectories, color: '#00d4ff' },
           { key: 'satellites', label: 'Satellite Tracker', state: showSatellites, set: setShowSatellites, color: '#667788', count: satData?.positions.length },
@@ -905,7 +976,11 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             <button onClick={() => setTrajPlaying(p => !p)} style={{ background: 'none', border: 'none', color: '#00d4ff', fontSize: 16, cursor: 'pointer', padding: 0 }}>
               {trajPlaying ? '⏸' : '▶'}
             </button>
-            <input type="range" min={0} max={trajectories.length - 1} value={trajIndex} onChange={e => setTrajIndex(parseInt(e.target.value))} style={{ flex: 1, accentColor: '#00d4ff' }} />
+            <button
+              onClick={() => setPlaybackSpeed(s => s >= 8 ? 0.5 : s * 2)}
+              style={{ background: 'rgba(0,212,255,0.15)', border: '1px solid #00d4ff33', borderRadius: 4, color: '#00d4ff', fontSize: 10, fontWeight: 700, padding: '2px 6px', cursor: 'pointer', fontFamily: 'monospace', minWidth: 32 }}
+            >{playbackSpeed}x</button>
+            <input type="range" min={0} max={trajectories.length - 1} value={trajIndex} onChange={e => { setTrajIndex(parseInt(e.target.value)); trajProgressRef.current = 0; }} style={{ flex: 1, accentColor: '#00d4ff' }} />
             <span style={{ color: '#667788', fontSize: 10, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
               {trajectories[trajIndex] ? new Date(trajectories[trajIndex].timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
             </span>
@@ -915,6 +990,50 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             <span>{trajectories[trajIndex]?.vessels.length || 0} vessels</span>
             <span>Now</span>
           </div>
+        </div>
+      )}
+
+      {/* ── AI Narration Panel ── */}
+      {hotspots.length > 0 && showHotspots && !selectedSpot && (
+        <div style={{
+          position: 'absolute', bottom: showTrajectories ? 120 : 60, right: 12, zIndex: 15,
+          background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)',
+          border: '1px solid #ef444444', borderRadius: 10,
+          padding: '10px 14px', maxWidth: 280, maxHeight: 200, overflowY: 'auto',
+        }}>
+          <div style={{ color: '#ef4444', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
+            ⚠ AI Detection — {hotspots.length} Hotspot{hotspots.length > 1 ? 's' : ''}
+          </div>
+          {hotspots.slice(0, 3).map(hs => (
+            <div
+              key={hs.id}
+              onClick={() => {
+                const Cesium = (window as any).Cesium;
+                if (viewerRef.current && Cesium) {
+                  viewerRef.current.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(hs.lng, hs.lat, 20000),
+                    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+                    duration: 2,
+                  });
+                }
+              }}
+              style={{
+                padding: '6px 0', borderBottom: '1px solid #1e2a42', cursor: 'pointer',
+                fontSize: 10, color: '#cbd5e1', lineHeight: 1.5,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                <span style={{ color: hs.score >= 7 ? '#ef4444' : '#eab308', fontWeight: 700 }}>
+                  Score {hs.score}/10
+                </span>
+                <span style={{ color: '#667788' }}>{hs.boatCount} boats · {Math.round(hs.durationMinutes)}min</span>
+              </div>
+              <div style={{ color: '#8899aa', fontSize: 9 }}>
+                {hs.vessels.slice(0, 3).map(v => v.name).join(', ')}
+                {hs.vessels.length > 3 ? ` +${hs.vessels.length - 3}` : ''}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
