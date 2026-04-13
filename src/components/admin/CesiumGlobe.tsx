@@ -87,7 +87,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [showWaypoints, setShowWaypoints] = useState(false); // Off by default — lots of points
-  const [showDrones, setShowDrones] = useState(false); // Phase 2 toggle
+  const [showDrones, setShowDrones] = useState(false); // Phase 2 toggle — OFF by default
   const [droneFlightPlans] = useState<DroneFlightPlan[]>(() => generateAllFlightPlans());
   const [droneTimeMs, setDroneTimeMs] = useState(5 * 60 * 60 * 1000); // Start at 5am
   // dronePlaying removed — drones sync to main trajectory timeline
@@ -994,10 +994,10 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
               hierarchy: new Cesium.PolygonHierarchy(scanPositions),
               height: 0,
               material: pos.action === 'scanning'
-                ? droneColor.withAlpha(0.15)
-                : droneColor.withAlpha(0.05),
+                ? droneColor.withAlpha(0.08)
+                : droneColor.withAlpha(0.03),
               outline: true,
-              outlineColor: droneColor.withAlpha(pos.action === 'scanning' ? 0.5 : 0.15),
+              outlineColor: droneColor.withAlpha(pos.action === 'scanning' ? 0.3 : 0.1),
             },
           });
         }
@@ -1038,8 +1038,9 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             polygon: {
               hierarchy: new Cesium.PolygonHierarchy(scanPositions),
               height: 0,
-              material: droneColor.withAlpha(0.06),
-              outline: false,
+              material: droneColor.withAlpha(0.02),
+              outline: true,
+              outlineColor: droneColor.withAlpha(0.08),
             },
           });
         }
