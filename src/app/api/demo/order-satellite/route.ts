@@ -97,48 +97,99 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// — Sentinel Hub (10m, free) —
+// — Sentinel-2 (10m, free) —
+// Uses Copernicus STAC catalog (no auth needed for search) with Sentinel Hub fallback
 async function handleSentinel(lat: number, lng: number, score?: number) {
-  if (!process.env.SENTINEL_HUB_CLIENT_ID) {
-    return {
-      success: false,
-      tier: 'sentinel',
-      tier_label: 'Sentinel-2 10m',
-      message: 'SENTINEL_HUB_CLIENT_ID not configured. Set up at https://shapps.dataspace.copernicus.eu/dashboard/',
-    };
-  }
-
   try {
-    const { searchSentinelScenes } = await import('@/lib/ocean-data/sentinel-hub');
-    const scenes = await searchSentinelScenes(lat, lng, 14, 30, 5);
+    // Try Sentinel Hub first if credentials are available
+    if (process.env.SENTINEL_HUB_CLIENT_ID) {
+      const { searchSentinelScenes } = await import('@/lib/ocean-data/sentinel-hub');
+      const scenes = await searchSentinelScenes(lat, lng, 14, 30, 5);
+      if (scenes.length > 0) {
+        const best = scenes[0];
+        return {
+          success: true,
+          tier: 'sentinel',
+          tier_label: 'Sentinel-2 10m (free)',
+          scene: {
+            id: best.id,
+            acquired: best.acquired,
+            cloud_cover: best.cloud_cover,
+            resolution: 10,
+            satellite: 'Sentinel-2',
+          },
+          order: {
+            id: 'sentinel-free',
+            status: 'Scene available — free tier, no order needed',
+          },
+          total_scenes_available: scenes.length,
+        };
+      }
+    }
 
-    if (scenes.length === 0) {
+    // Fallback: Copernicus OData catalog (free, no auth required for search)
+    const now = new Date();
+    const daysBack = 30;
+    const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+
+    const odataUrl = `https://catalogue.dataspace.copernicus.eu/odata/v1/Products?$filter=` +
+      `Collection/Name eq 'SENTINEL-2'` +
+      ` and OData.CSC.Intersects(area=geography'SRID=4326;POINT(${lng} ${lat})')` +
+      ` and ContentDate/Start gt ${startDate.toISOString()}` +
+      ` and ContentDate/Start lt ${now.toISOString()}` +
+      ` and Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' and att/Value lt 50.00)` +
+      `&$orderby=ContentDate/Start desc&$top=10`;
+
+    const odataRes = await fetch(odataUrl);
+
+    if (!odataRes.ok) {
+      const text = await odataRes.text();
+      throw new Error(`Copernicus catalog search failed ${odataRes.status}: ${text.substring(0, 200)}`);
+    }
+
+    const odataData = await odataRes.json();
+    // Prefer L2A scenes (atmospherically corrected) over L1C
+    const allProducts = odataData.value || [];
+    const l2aProducts = allProducts.filter((p: any) => p.Name?.includes('MSIL2A'));
+    const features = l2aProducts.length > 0 ? l2aProducts : allProducts;
+
+    if (features.length === 0) {
       return {
         success: false,
         tier: 'sentinel',
         tier_label: 'Sentinel-2 10m',
-        message: 'No clear Sentinel-2 scenes found in the last 14 days',
+        message: `No clear Sentinel-2 scenes found in the last ${daysBack} days (cloud cover < 50%)`,
         scenes_found: 0,
       };
     }
 
-    const best = scenes[0];
+    const best = features[0];
+    const sceneId = best.Name || best.Id;
+    const acquired = best.ContentDate?.Start;
+    // Extract cloud cover from attributes
+    const ccAttr = (best.Attributes || []).find((a: any) => a.Name === 'cloudCover');
+    const cloudCover = ccAttr?.Value ?? 0;
+
+    // Build Copernicus Browser link for direct viewing
+    const browserLink = `https://browser.dataspace.copernicus.eu/?zoom=12&lat=${lat}&lng=${lng}&themeId=DEFAULT-THEME&visualizationUrl=https://sh.dataspace.copernicus.eu/ogc/wms/a91f72b0-7c1d-4a19-8bd4-3f4bfb04f01a&datasetId=S2_L2A_CDAS&fromTime=${startDate.toISOString()}&toTime=${now.toISOString()}`;
+
     return {
       success: true,
       tier: 'sentinel',
       tier_label: 'Sentinel-2 10m (free)',
       scene: {
-        id: best.id,
-        acquired: best.acquired,
-        cloud_cover: best.cloud_cover,
+        id: sceneId,
+        acquired,
+        cloud_cover: cloudCover,
         resolution: 10,
-        satellite: 'Sentinel-2',
+        satellite: best.properties?.platform || 'Sentinel-2',
       },
       order: {
-        id: 'sentinel-free',
-        status: 'Scene available — free tier, no order needed',
+        id: 'copernicus-free',
+        status: 'Scene available — view free on Copernicus Browser',
+        browser_link: browserLink,
       },
-      total_scenes_available: scenes.length,
+      total_scenes_available: features.length,
     };
   } catch (err) {
     return {
