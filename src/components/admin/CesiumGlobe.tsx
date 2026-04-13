@@ -258,15 +258,21 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     return () => cancelAnimationFrame(animId);
   }, [trajPlaying, trajectories, trajIndex, playbackSpeed]);
 
-  // Fly to fishing spot
+  // Fly to fishing spot — offset camera slightly so the spot is centered in view
   const flyToSpot = useCallback((spot: FishingSpot) => {
     const Cesium = (window as any).Cesium;
     if (!viewerRef.current || !Cesium) return;
     setSelectedSpot(spot);
     try {
+      // Offset camera slightly south so the spot appears in the center of view
+      const offsetLat = spot.lat - (spot.radiusKm / 111) * 0.8;
       viewerRef.current.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat, spot.zoom),
-        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+        destination: Cesium.Cartesian3.fromDegrees(spot.lng, offsetLat, spot.zoom),
+        orientation: {
+          heading: Cesium.Math.toRadians(0),
+          pitch: Cesium.Math.toRadians(-45),
+          roll: 0,
+        },
         duration: 2,
       });
     } catch (e) {
@@ -413,10 +419,10 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           },
         });
 
-        // 3D extruded transparent wall — rises from ocean like airspace zones
+        // 3D extruded transparent wall — always visible, brighter when selected/active
         const isSelected = selectedSpot?.id === spot.id;
-        if (isSelected || isActive) {
-          const wallHeight = isSelected ? 4000 : 1500;
+        {
+          const wallHeight = isSelected ? 4000 : isActive ? 2000 : 800;
 
           // Use polygon with extrudedHeight for true 3D transparent volume
           // Convert flat [lng, lat, lng, lat...] to hierarchy
@@ -432,9 +438,9 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
               hierarchy: new Cesium.PolygonHierarchy(polyPositions),
               height: 0,
               extrudedHeight: wallHeight,
-              material: color.withAlpha(isSelected ? 0.08 : 0.04),
+              material: color.withAlpha(isSelected ? 0.10 : isActive ? 0.06 : 0.03),
               outline: true,
-              outlineColor: color.withAlpha(isSelected ? 0.4 : 0.2),
+              outlineColor: color.withAlpha(isSelected ? 0.5 : isActive ? 0.3 : 0.12),
             },
           });
 
