@@ -6,6 +6,8 @@ import type { FishingSpot } from '@/lib/ocean-data/fishing-spots';
 import { ALL_WAYPOINTS } from '@/lib/ocean-data/baja-directions-waypoints';
 import { detectHotspots, generateReplayNarration } from '@/lib/ocean-data/replay-engine';
 import type { Hotspot } from '@/lib/ocean-data/replay-engine';
+import { generateAllFlightPlans, getDronePosition, getVidarScanArea } from '@/lib/ocean-data/drone-simulation';
+import type { DroneFlightPlan } from '@/lib/ocean-data/drone-simulation';
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface SatPosition {
@@ -85,11 +87,36 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [showWaypoints, setShowWaypoints] = useState(false); // Off by default — lots of points
-  const [showSatellites, setShowSatellites] = useState(false); // Off by default to reduce clutter
+  const [showDrones, setShowDrones] = useState(false); // Phase 2 toggle
+  const [droneFlightPlans] = useState<DroneFlightPlan[]>(() => generateAllFlightPlans());
+  const [droneTimeMs, setDroneTimeMs] = useState(5 * 60 * 60 * 1000); // Start at 5am
+  const [dronePlaying, setDronePlaying] = useState(false);
+  const [showSatellites, setShowSatellites] = useState(false);
   const [showVessels, setShowVessels] = useState(true);
   const [showSpots, setShowSpots] = useState(true);
   const [showOrders, setShowOrders] = useState(true);
   const [showTrajectories, setShowTrajectories] = useState(true); // On by default — show boat history
+
+  // Drone animation loop
+  useEffect(() => {
+    if (!dronePlaying || !showDrones) return;
+    let animId: number;
+    let lastTime = performance.now();
+
+    const animate = (now: number) => {
+      const dt = now - lastTime;
+      lastTime = now;
+      // 1 second real time = 2 minutes sim time (480x speed for 8hr in ~1min)
+      setDroneTimeMs(t => {
+        const newT = t + dt * 480;
+        if (newT > 21 * 60 * 60 * 1000) return 5 * 60 * 60 * 1000; // Loop back to 5am
+        return newT;
+      });
+      animId = requestAnimationFrame(animate);
+    };
+    animId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animId);
+  }, [dronePlaying, showDrones]);
 
   // Close search on outside click
   useEffect(() => {
@@ -909,10 +936,109 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         }
       }
     }
+    // ── Phase 2: VIDAR Drones ──
+    if (showDrones) {
+      // Get active flight plans for current time
+      const activePlans = droneFlightPlans.filter(p => {
+        const startMs = p.startHour * 60 * 60 * 1000;
+        return droneTimeMs >= startMs && droneTimeMs <= startMs + 8 * 60 * 60 * 1000;
+      });
+
+      for (const plan of activePlans) {
+        const pos = getDronePosition(plan, droneTimeMs);
+        if (!pos) continue;
+
+        const droneColor = Cesium.Color.fromCssColorString(plan.color);
+
+        // Drone marker at altitude
+        viewer.entities.add({
+          id: `drone-${plan.id}`,
+          name: plan.name,
+          description: `<div><b>Action:</b> ${pos.action}</div><div><b>Altitude:</b> ${pos.altitude.toFixed(0)}m</div>${pos.spotName ? `<div><b>Target:</b> ${pos.spotName}</div>` : ''}`,
+          position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, pos.altitude),
+          point: {
+            pixelSize: 12,
+            color: droneColor,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2,
+          },
+          label: {
+            text: `✈ ${plan.direction === 'north' ? 'N' : 'S'}${plan.sortie}`,
+            font: 'bold 11px monospace',
+            fillColor: droneColor,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -14),
+          },
+        });
+
+        // Line from drone to ground (nadir)
+        viewer.entities.add({
+          id: `drone-nadir-${plan.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+              pos.lng, pos.lat, pos.altitude,
+              pos.lng, pos.lat, 0,
+            ]),
+            width: 1,
+            material: droneColor.withAlpha(0.3),
+          },
+        });
+
+        // VIDAR scan area on the ground (rectangle below drone)
+        if (pos.action === 'scanning' || pos.action === 'transit') {
+          const scanArea = getVidarScanArea(pos.lat, pos.lng, pos.heading, plan.scanWidthKm, 3);
+          const scanFlat = scanArea.flatMap(([lng, lat]) => [lng, lat]);
+
+          // Scan swath on ground
+          const scanPositions = [];
+          for (let si = 0; si < scanFlat.length; si += 2) {
+            scanPositions.push(Cesium.Cartesian3.fromDegrees(scanFlat[si], scanFlat[si + 1]));
+          }
+
+          viewer.entities.add({
+            id: `drone-scan-${plan.id}`,
+            polygon: {
+              hierarchy: new Cesium.PolygonHierarchy(scanPositions),
+              height: 0,
+              material: pos.action === 'scanning'
+                ? droneColor.withAlpha(0.15)
+                : droneColor.withAlpha(0.05),
+              outline: true,
+              outlineColor: droneColor.withAlpha(pos.action === 'scanning' ? 0.5 : 0.15),
+            },
+          });
+        }
+
+        // Flight path trail (past positions)
+        const trailPoints: number[] = [];
+        const trailSteps = 30;
+        const trailTimeStep = 2 * 60 * 1000; // 2 min steps
+        for (let ts = trailSteps; ts >= 0; ts--) {
+          const trailT = droneTimeMs - ts * trailTimeStep;
+          const trailPos = getDronePosition(plan, trailT);
+          if (trailPos) trailPoints.push(trailPos.lng, trailPos.lat, trailPos.altitude);
+        }
+
+        if (trailPoints.length >= 6) {
+          viewer.entities.add({
+            id: `drone-trail-${plan.id}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(trailPoints),
+              width: 2,
+              material: droneColor.withAlpha(0.4),
+            },
+          });
+        }
+      }
+    }
+
     } catch (e) {
       console.log('[CesiumGlobe] Entity update error:', e);
     }
-  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, showWaypoints, showHotspots, hotspots, selectedSpot]);
+  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, showWaypoints, showHotspots, hotspots, selectedSpot, showDrones, droneTimeMs, droneFlightPlans]);
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
@@ -1135,7 +1261,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             { key: 'hotspots', label: 'AI Hotspots', state: showHotspots, set: setShowHotspots, color: '#ef4444', count: hotspots.length },
             { key: 'orders', label: 'Satellite Orders', state: showOrders, set: setShowOrders, color: '#a855f7', count: satOrders.length },
             { key: 'trajectories', label: '48h Replay', state: showTrajectories, set: setShowTrajectories, color: '#00d4ff' },
-            { key: 'satellites', label: 'Satellite Tracker', state: showSatellites, set: setShowSatellites, color: '#667788', count: satData?.positions.length },
+            { key: 'drones', label: '🛩 Phase 2: VIDAR Drones', state: showDrones, set: setShowDrones, color: '#00d4ff' },
+          { key: 'satellites', label: 'Satellite Tracker', state: showSatellites, set: setShowSatellites, color: '#667788', count: satData?.positions.length },
           ].map(l => (
             <div key={l.key} onClick={() => l.set(!l.state)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer', opacity: l.state ? 1 : 0.35 }}>
               <span style={{ width: 8, height: 8, borderRadius: 2, background: l.state ? l.color : '#333', border: `1px solid ${l.color}44`, flexShrink: 0 }} />
@@ -1189,6 +1316,34 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             <span>{trajectories[trajIndex]?.vessels.length || 0} vessels</span>
             <span>Now</span>
           </div>
+        </div>
+      )}
+
+      {/* ── Phase 2 Drone Control ── */}
+      {showDrones && (
+        <div style={{
+          position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
+          background: 'rgba(10,15,26,0.95)', backdropFilter: 'blur(12px)',
+          border: '1px solid #00d4ff44', borderRadius: 10,
+          padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 11,
+        }}>
+          <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: 12 }}>🛩 PHASE 2 — VIDAR DRONE OPS</span>
+          <button
+            onClick={() => setDronePlaying(p => !p)}
+            style={{ background: 'none', border: 'none', color: '#00d4ff', fontSize: 14, cursor: 'pointer' }}
+          >{dronePlaying ? '⏸' : '▶'}</button>
+          <span style={{ color: '#e2e8f0', fontFamily: 'monospace', fontWeight: 700 }}>
+            {String(Math.floor(droneTimeMs / 3600000)).padStart(2, '0')}:
+            {String(Math.floor((droneTimeMs % 3600000) / 60000)).padStart(2, '0')}
+          </span>
+          <input
+            type="range" min={5 * 3600000} max={21 * 3600000} value={droneTimeMs}
+            onChange={e => setDroneTimeMs(parseInt(e.target.value))}
+            style={{ width: 120, accentColor: '#00d4ff' }}
+          />
+          <span style={{ color: '#667788', fontSize: 9 }}>
+            S1: 05:00-13:00 | S2: 13:00-21:00
+          </span>
         </div>
       )}
 
