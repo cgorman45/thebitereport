@@ -142,12 +142,12 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         } catch { /* ignore */ }
       }
 
-      // Camera: San Diego offshore — same as the screenshot default view
+      // Camera: San Diego offshore — looking WSW over the open ocean
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(-117.40, 32.72, 45000),
+        destination: Cesium.Cartesian3.fromDegrees(-117.25, 32.75, 60000),
         orientation: {
-          heading: Cesium.Math.toRadians(15), // Slightly NNE heading
-          pitch: Cesium.Math.toRadians(-40),
+          heading: Cesium.Math.toRadians(240), // Looking WSW toward open ocean
+          pitch: Cesium.Math.toRadians(-30),
           roll: 0,
         },
         duration: 0,
@@ -155,11 +155,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
       viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#050a15');
       viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a1628');
-      viewer.scene.globe.depthTestAgainstTerrain = true;
-      // Make ocean translucent so underwater bathymetry is visible
-      viewer.scene.globe.translucency.enabled = true;
-      viewer.scene.globe.translucency.frontFaceAlphaByDistance = new Cesium.NearFarScalar(1000, 0.3, 100000, 0.6);
-      viewer.scene.globe.undergroundColor = Cesium.Color.fromCssColorString('#0a1628');
+      viewer.scene.globe.depthTestAgainstTerrain = false;
       viewer.scene.screenSpaceCameraController.enableZoom = true;
       viewer.scene.screenSpaceCameraController.enableRotate = true;
       viewer.scene.screenSpaceCameraController.enableTilt = true;
@@ -299,8 +295,11 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   // Listen for flyToSpot events from page-level buttons
   useEffect(() => {
     const handler = (e: Event) => {
-      const spot = (e as CustomEvent).detail;
-      if (spot) flyToSpot(spot);
+      const detail = (e as CustomEvent).detail;
+      if (!detail) return;
+      // Find the full spot object from FISHING_SPOTS (event may have partial data)
+      const fullSpot = FISHING_SPOTS.find(s => s.id === detail.id) || detail;
+      flyToSpot(fullSpot);
     };
     window.addEventListener('flyToSpot', handler);
     return () => window.removeEventListener('flyToSpot', handler);
@@ -312,10 +311,10 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     if (!viewerRef.current || !Cesium) return;
     setSelectedSpot(null);
     viewerRef.current.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(-117.40, 32.72, 45000),
+      destination: Cesium.Cartesian3.fromDegrees(-117.25, 32.75, 60000),
       orientation: {
-        heading: Cesium.Math.toRadians(15),
-        pitch: Cesium.Math.toRadians(-40),
+        heading: Cesium.Math.toRadians(240),
+        pitch: Cesium.Math.toRadians(-30),
         roll: 0,
       },
       duration: 2,
@@ -1243,7 +1242,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           </div>
           <p style={{ color: '#8899aa', fontSize: 11, margin: '0 0 8px', lineHeight: 1.5 }}>{selectedSpot.description}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-            {selectedSpot.species.map(s => (
+            {(selectedSpot.species || []).map(s => (
               <span key={s} style={{ padding: '2px 8px', borderRadius: 4, fontSize: 9, background: selectedSpot.color + '22', color: selectedSpot.color, fontWeight: 600 }}>{s}</span>
             ))}
           </div>
