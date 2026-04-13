@@ -473,37 +473,51 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
         // Ground-level geofence — ONLY show when selected or active
         if (isSelected || isActive) {
-          // Polyline border elevated above 3D tiles
-          const borderPositions = [];
-          for (let pi = 0; pi < geofencePoints.length; pi += 2) {
-            borderPositions.push(geofencePoints[pi], geofencePoints[pi + 1], 200);
-          }
+          const wallHeight = isSelected ? 2000 : 800;
 
+          // Ground ring (polyline only — NO polygon fill, avoids white blocks)
+          const groundPositions = [];
+          for (let pi = 0; pi < geofencePoints.length; pi += 2) {
+            groundPositions.push(geofencePoints[pi], geofencePoints[pi + 1], 50);
+          }
           viewer.entities.add({
-            id: `geofence-${spot.id}`,
+            id: `geofence-ground-${spot.id}`,
             polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights(borderPositions),
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(groundPositions),
               width: isSelected ? 3 : 2,
-              material: color.withAlpha(isSelected ? 0.8 : 0.5),
+              material: color.withAlpha(isSelected ? 0.7 : 0.4),
             },
           });
 
-          // Fill polygon elevated above 3D tiles
-          const polyPositions = [];
+          // Top ring at wall height
+          const topPositions = [];
           for (let pi = 0; pi < geofencePoints.length; pi += 2) {
-            polyPositions.push(Cesium.Cartesian3.fromDegrees(geofencePoints[pi], geofencePoints[pi + 1]));
+            topPositions.push(geofencePoints[pi], geofencePoints[pi + 1], wallHeight);
           }
-
           viewer.entities.add({
-            id: `geofence-fill-${spot.id}`,
-            polygon: {
-              hierarchy: new Cesium.PolygonHierarchy(polyPositions),
-              height: 150,
-              material: color.withAlpha(isSelected ? 0.08 : 0.04),
-              outline: true,
-              outlineColor: color.withAlpha(0.3),
+            id: `geofence-top-${spot.id}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(topPositions),
+              width: isSelected ? 2 : 1,
+              material: color.withAlpha(isSelected ? 0.5 : 0.25),
             },
           });
+
+          // Vertical lines at corners (every 3rd point) connecting ground to top
+          for (let pi = 0; pi < geofencePoints.length - 2; pi += 6) {
+            const lng = geofencePoints[pi];
+            const lat = geofencePoints[pi + 1];
+            viewer.entities.add({
+              id: `geofence-vert-${spot.id}-${pi}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+                  lng, lat, 50, lng, lat, wallHeight,
+                ]),
+                width: 1,
+                material: color.withAlpha(isSelected ? 0.35 : 0.15),
+              },
+            });
+          }
         }
 
         // Boat count label — only when active with boats inside
