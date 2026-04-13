@@ -99,6 +99,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [showDrones, setShowDrones] = useState(false); // Phase 2 toggle — OFF by default
   const [droneFlightPlans] = useState<DroneFlightPlan[]>(() => generateAllFlightPlans());
   const [droneTimeMs, setDroneTimeMs] = useState(5 * 60 * 60 * 1000); // Start at 5am
+  const droneTimeMsRef = useRef(5 * 60 * 60 * 1000); // Ref for animation loop (avoids re-render)
   // dronePlaying removed — drones sync to main trajectory timeline
   const [showSatellites, setShowSatellites] = useState(false);
   const [showVessels, setShowVessels] = useState(true);
@@ -106,24 +107,16 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [showOrders, setShowOrders] = useState(true);
   const [showTrajectories, setShowTrajectories] = useState(true); // On by default — show boat history
 
-  // Sync drone time to trajectory timeline — with smooth interpolation
+  // Sync drone time to trajectory timeline
   useEffect(() => {
     if (!showDrones || trajectories.length === 0) return;
     const idx = Math.min(trajIndex, trajectories.length - 1);
     const snap = trajectories[idx];
-    const nextSnap = trajectories[Math.min(idx + 1, trajectories.length - 1)];
     if (snap) {
-      const d1 = new Date(snap.timestamp);
-      const ms1 = (d1.getHours() * 3600 + d1.getMinutes() * 60 + d1.getSeconds()) * 1000;
-      if (nextSnap && nextSnap !== snap) {
-        const d2 = new Date(nextSnap.timestamp);
-        const ms2 = (d2.getHours() * 3600 + d2.getMinutes() * 60 + d2.getSeconds()) * 1000;
-        // Interpolate between snapshots using sub-index progress
-        const t = trajProgressRef.current;
-        setDroneTimeMs(ms1 + (ms2 - ms1) * t);
-      } else {
-        setDroneTimeMs(ms1);
-      }
+      const d = new Date(snap.timestamp);
+      const ms = (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000;
+      droneTimeMsRef.current = ms;
+      setDroneTimeMs(ms); // Update state only on index change (not every frame)
     }
   }, [showDrones, trajIndex, trajectories]);
 
@@ -312,7 +305,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           const d2 = new Date(next.timestamp);
           const ms2 = (d2.getHours() * 3600 + d2.getMinutes() * 60 + d2.getSeconds()) * 1000;
           const smoothDroneTime = ms1 + (ms2 - ms1) * t;
-          setDroneTimeMs(smoothDroneTime);
+          droneTimeMsRef.current = smoothDroneTime;
 
           // Also smoothly move drone entities between their waypoint positions
           for (const plan of droneFlightPlans) {
@@ -945,66 +938,159 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       }
     }
 
-    // ── Satellites ──
+    // ── Satellites with imaging geometry ──
     if (showSatellites && satData) {
+      const R = 6371;
+
       for (const sat of satData.positions) {
         const altMeters = sat.altitude * 1000;
-        const color = Cesium.Color.fromCssColorString(sat.color);
+        const sr = parseInt(sat.color.slice(1, 3), 16) / 255;
+        const sg = parseInt(sat.color.slice(3, 5), 16) / 255;
+        const sb = parseInt(sat.color.slice(5, 7), 16) / 255;
+
+        // Satellite icon
+        const satSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+          <rect x="3" y="10" width="18" height="4" rx="1" fill="${sat.color}" opacity="0.9" stroke="rgba(0,0,0,0.5)" stroke-width="0.5"/>
+          <rect x="0" y="8" width="6" height="8" rx="1" fill="${sat.color}" opacity="0.6"/>
+          <rect x="18" y="8" width="6" height="8" rx="1" fill="${sat.color}" opacity="0.6"/>
+          <circle cx="12" cy="12" r="2" fill="white" opacity="0.8"/>
+        </svg>`;
 
         viewer.entities.add({
           id: `sat-${sat.id}`,
           name: sat.name,
-          description: `<table><tr><td>Provider</td><td><b>${sat.provider}</b></td></tr><tr><td>Resolution</td><td><b>${sat.resolution}</b></td></tr><tr><td>Altitude</td><td><b>${sat.altitude.toFixed(0)} km</b></td></tr></table>`,
+          description: `<table><tr><td>Provider</td><td><b>${sat.provider}</b></td></tr><tr><td>Resolution</td><td><b>${sat.resolution}</b></td></tr><tr><td>Swath</td><td><b>${sat.swathKm} km</b></td></tr><tr><td>Altitude</td><td><b>${sat.altitude.toFixed(0)} km</b></td></tr></table>`,
           position: Cesium.Cartesian3.fromDegrees(sat.lng, sat.lat, altMeters),
-          point: { pixelSize: 8, color: color, outlineColor: Cesium.Color.WHITE, outlineWidth: 1 },
+          billboard: {
+            image: 'data:image/svg+xml,' + encodeURIComponent(satSvg),
+            width: 22, height: 22,
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 2, 1e7, 0.5),
+          },
           label: {
-            text: sat.name,
-            font: '10px monospace',
-            fillColor: color,
+            text: `${sat.name}\n${sat.resolution} · ${sat.provider}`,
+            font: 'bold 10px monospace',
+            fillColor: new Cesium.Color(sr, sg, sb, 1),
             outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 1,
+            outlineWidth: 2,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            pixelOffset: new Cesium.Cartesian2(0, -12),
+            pixelOffset: new Cesium.Cartesian2(0, -16),
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.3),
           },
         });
 
-        // Nadir line
+        // Imaging cone — lines from satellite to swath edges on ground
+        const halfSwathDeg = (sat.swathKm / 2) / 111;
+        // Compute ground footprint corners based on satellite heading (assume N-S orbit)
+        const footprint = [
+          [sat.lng - halfSwathDeg, sat.lat - halfSwathDeg * 0.5],
+          [sat.lng + halfSwathDeg, sat.lat - halfSwathDeg * 0.5],
+          [sat.lng + halfSwathDeg, sat.lat + halfSwathDeg * 0.5],
+          [sat.lng - halfSwathDeg, sat.lat + halfSwathDeg * 0.5],
+        ];
+
+        // 4 cone lines from satellite down to footprint corners
+        for (let ci = 0; ci < 4; ci++) {
+          viewer.entities.add({
+            id: `sat-cone-${sat.id}-${ci}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+                sat.lng, sat.lat, altMeters,
+                footprint[ci][0], footprint[ci][1], 15,
+              ]),
+              width: 1,
+              material: new Cesium.Color(sr, sg, sb, 0.2),
+            },
+          });
+        }
+
+        // Ground footprint rectangle
+        const fpFlat: number[] = [];
+        for (const [fLng, fLat] of [...footprint, footprint[0]]) {
+          fpFlat.push(fLng, fLat, 12);
+        }
         viewer.entities.add({
-          id: `sat-nadir-${sat.id}`,
+          id: `sat-fp-${sat.id}`,
           polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArrayHeights([sat.lng, sat.lat, altMeters, sat.lng, sat.lat, 0]),
-            width: 1,
-            material: safeColor(Cesium, sat.color, 0.15),
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights(fpFlat),
+            width: 2,
+            material: new Cesium.Color(sr, sg, sb, 0.5),
+          },
+        });
+
+        // 📸 label at ground nadir
+        viewer.entities.add({
+          id: `sat-nadir-label-${sat.id}`,
+          position: Cesium.Cartesian3.fromDegrees(sat.lng, sat.lat, 20),
+          label: {
+            text: `📸 ${sat.resolution}`,
+            font: 'bold 10px monospace',
+            fillColor: new Cesium.Color(sr, sg, sb, 0.8),
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.TOP,
+            pixelOffset: new Cesium.Cartesian2(0, 4),
+            scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 5e5, 0.3),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5e5),
           },
         });
       }
 
-      // Orbit paths
+      // Orbit paths with ground track swath
       for (const orbit of satData.orbits) {
-        const color = Cesium.Color.fromCssColorString(orbit.color);
+        // Find swath width for this satellite
+        const satInfo = satData.positions.find(s => s.id === orbit.id);
+        const swathKm = satInfo?.swathKm || 20;
+        const halfSwathDeg = (swathKm / 2) / 111;
+        const oColor = orbit.color;
+        const or = parseInt(oColor.slice(1, 3), 16) / 255;
+        const og = parseInt(oColor.slice(3, 5), 16) / 255;
+        const ob = parseInt(oColor.slice(5, 7), 16) / 255;
+
         let prevLng = orbit.positions[0]?.lng || 0;
+
+        // Build orbit path + left/right ground swath edges
         let segCoords: number[] = [];
+        let leftEdge: number[] = [];
+        let rightEdge: number[] = [];
         let segIdx = 0;
+
+        const flushSeg = () => {
+          if (segCoords.length >= 6) {
+            viewer.entities.add({
+              id: `orbit-${orbit.id}-${segIdx}`,
+              polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1.5, material: new Cesium.Color(or, og, ob, 0.35) },
+            });
+          }
+          // Ground swath edges (only for non-huge swaths — skip Terra MODIS 2330km)
+          if (swathKm < 500 && leftEdge.length >= 6) {
+            viewer.entities.add({
+              id: `orbit-swath-L-${orbit.id}-${segIdx}`,
+              polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(leftEdge), width: 1, material: new Cesium.Color(or, og, ob, 0.12) },
+            });
+            viewer.entities.add({
+              id: `orbit-swath-R-${orbit.id}-${segIdx}`,
+              polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(rightEdge), width: 1, material: new Cesium.Color(or, og, ob, 0.12) },
+            });
+          }
+          segIdx++;
+          segCoords = [];
+          leftEdge = [];
+          rightEdge = [];
+        };
+
         for (const p of orbit.positions) {
           if (Math.abs(p.lng - prevLng) > 180) {
-            if (segCoords.length >= 6) {
-              viewer.entities.add({
-                id: `orbit-${orbit.id}-${segIdx++}`,
-                polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1, material: safeColor(Cesium, orbit.color, 0.3) },
-              });
-            }
-            segCoords = [];
+            flushSeg();
           }
-          segCoords.push(p.lng, p.lat, (p.alt || 786) * 1000);
+          const alt = (p.alt || 786) * 1000;
+          segCoords.push(p.lng, p.lat, alt);
+          leftEdge.push(p.lng - halfSwathDeg, p.lat, 10);
+          rightEdge.push(p.lng + halfSwathDeg, p.lat, 10);
           prevLng = p.lng;
         }
-        if (segCoords.length >= 6) {
-          viewer.entities.add({
-            id: `orbit-${orbit.id}-final`,
-            polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1, material: safeColor(Cesium, orbit.color, 0.3) },
-          });
-        }
+        flushSeg();
       }
     }
     // ── Phase 2: Penguin B VTOL Drones with VIDAR ──
@@ -1378,7 +1464,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     } catch (e: any) {
       console.error('[CesiumGlobe] Entity update error:', e?.message || e, e?.stack?.split('\n')[1]);
     }
-  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, showWaypoints, showHotspots, hotspots, selectedSpot, showDrones, droneTimeMs, droneFlightPlans]);
+  }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, showWaypoints, showHotspots, hotspots, selectedSpot, showDrones, droneFlightPlans]); // eslint-disable-line react-hooks/exhaustive-deps
+  // NOTE: droneTimeMs removed from deps — uses droneTimeMsRef.current in entity update to avoid infinite re-render loop
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
