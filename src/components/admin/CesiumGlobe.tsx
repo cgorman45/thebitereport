@@ -1132,7 +1132,14 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       {showTrajectories && trajectories.length > 0 && (
         <div style={{ position: 'absolute', bottom: 50, left: 10, right: 10, zIndex: 10, background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)', border: '1px solid #1e2a42', borderRadius: 8, padding: '8px 14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={() => setTrajPlaying(p => !p)} style={{ background: 'none', border: 'none', color: '#00d4ff', fontSize: 16, cursor: 'pointer', padding: 0 }}>
+            <button onClick={() => {
+              if (!trajPlaying) {
+                // Start from beginning when pressing play
+                setTrajIndex(0);
+                trajProgressRef.current = 0;
+              }
+              setTrajPlaying(p => !p);
+            }} style={{ background: 'none', border: 'none', color: '#00d4ff', fontSize: 16, cursor: 'pointer', padding: 0 }}>
               {trajPlaying ? '⏸' : '▶'}
             </button>
             <button
