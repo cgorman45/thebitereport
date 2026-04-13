@@ -993,7 +993,37 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     if (showSatellites && satData) {
       const R = 6371;
 
-      for (const sat of satData.positions) {
+      // Demo satellites that always pass over the SoCal fishing area
+      // These simulate upcoming passes for the demo presentation
+      const timeProgress = trajectories.length > 0 ? trajIndex / Math.max(1, trajectories.length - 1) : 0; // 0-1
+      const demoSats: typeof satData.positions = [
+        {
+          id: 'DEMO-PLEIADES-NEO', name: 'Pléiades Neo 3', provider: 'Airbus', resolution: '30cm',
+          swathKm: 14, color: '#d946ef', type: 'optical',
+          // Flies NNW to SSE over fishing grounds
+          lat: 35.0 - timeProgress * 8, lng: -119.5 + timeProgress * 3,
+          altitude: 620, velocity: 7.5, timestamp: '',
+        },
+        {
+          id: 'DEMO-WORLDVIEW', name: 'WorldView-3', provider: 'Maxar', resolution: '31cm',
+          swathKm: 13, color: '#ef4444', type: 'optical',
+          // Flies NE to SW, offset timing from Pleiades
+          lat: 34.5 - ((timeProgress + 0.3) % 1) * 6, lng: -116.0 - ((timeProgress + 0.3) % 1) * 4,
+          altitude: 617, velocity: 7.5, timestamp: '',
+        },
+        {
+          id: 'DEMO-SENTINEL', name: 'Sentinel-2A', provider: 'ESA', resolution: '10m',
+          swathKm: 290, color: '#0ea5e9', type: 'multispectral',
+          // Wide swath pass N to S
+          lat: 36.0 - ((timeProgress + 0.6) % 1) * 10, lng: -117.5 + ((timeProgress + 0.6) % 1) * 1,
+          altitude: 786, velocity: 7.5, timestamp: '',
+        },
+      ];
+
+      // Render both real + demo satellites
+      const allSats = [...satData.positions, ...demoSats];
+
+      for (const sat of allSats) {
         const altMeters = sat.altitude * 1000;
         const sr = parseInt(sat.color.slice(1, 3), 16) / 255;
         const sg = parseInt(sat.color.slice(3, 5), 16) / 255;
@@ -1142,6 +1172,56 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           prevLng = p.lng;
         }
         flushSeg();
+      }
+
+      // Demo satellite ground tracks over SoCal
+      for (const ds of demoSats) {
+        const dr = parseInt(ds.color.slice(1, 3), 16) / 255;
+        const dg = parseInt(ds.color.slice(3, 5), 16) / 255;
+        const db = parseInt(ds.color.slice(5, 7), 16) / 255;
+        const altM = ds.altitude * 1000;
+        const halfSwDeg = (ds.swathKm / 2) / 111;
+
+        // Generate ground track: 20 points along the pass trajectory
+        const trackPts: number[] = [];
+        const trackL: number[] = [];
+        const trackR: number[] = [];
+        for (let step = 0; step <= 20; step++) {
+          const t = step / 20;
+          let tLat: number, tLng: number;
+          if (ds.id === 'DEMO-PLEIADES-NEO') {
+            tLat = 35.0 - t * 8; tLng = -119.5 + t * 3;
+          } else if (ds.id === 'DEMO-WORLDVIEW') {
+            tLat = 34.5 - t * 6; tLng = -116.0 - t * 4;
+          } else {
+            tLat = 36.0 - t * 10; tLng = -117.5 + t * 1;
+          }
+          trackPts.push(tLng, tLat, altM);
+          trackL.push(tLng - halfSwDeg, tLat, 10);
+          trackR.push(tLng + halfSwDeg, tLat, 10);
+        }
+
+        // Orbit track at altitude
+        viewer.entities.add({
+          id: `demo-orbit-${ds.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights(trackPts),
+            width: 2,
+            material: new Cesium.Color(dr, dg, db, 0.4),
+          },
+        });
+
+        // Ground swath edges
+        if (ds.swathKm < 500) {
+          viewer.entities.add({
+            id: `demo-swath-L-${ds.id}`,
+            polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(trackL), width: 1, material: new Cesium.Color(dr, dg, db, 0.15) },
+          });
+          viewer.entities.add({
+            id: `demo-swath-R-${ds.id}`,
+            polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(trackR), width: 1, material: new Cesium.Color(dr, dg, db, 0.15) },
+          });
+        }
       }
     }
     // ── Phase 2: Penguin B VTOL Drones with VIDAR ──
