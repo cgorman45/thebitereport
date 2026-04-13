@@ -203,6 +203,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           if (snaps.length > 2) {
             const hs = detectHotspots(snaps, 1.5, 3, 3);
             setHotspots(hs);
+            // Expose hotspots to page via custom event
+            window.dispatchEvent(new CustomEvent('hotspotsDetected', { detail: hs }));
             setReplayNarration(generateReplayNarration(snaps, hs));
           }
         }
@@ -290,6 +292,23 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     } catch (e) {
       console.log('[CesiumGlobe] flyTo error:', e);
     }
+  }, []);
+
+  // Listen for flyToHotspot events from page
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const hs = (e as CustomEvent).detail;
+      const Cesium = (window as any).Cesium;
+      if (viewerRef.current && Cesium && hs) {
+        viewerRef.current.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(hs.lng, hs.lat, 20000),
+          orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
+          duration: 2,
+        });
+      }
+    };
+    window.addEventListener('flyToHotspot', handler);
+    return () => window.removeEventListener('flyToHotspot', handler);
   }, []);
 
   // Listen for flyToSpot events from page-level buttons
@@ -1189,49 +1208,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         </div>
       )}
 
-      {/* ── AI Narration Panel ── */}
-      {hotspots.length > 0 && showHotspots && !selectedSpot && (
-        <div style={{
-          position: 'absolute', bottom: showTrajectories ? 120 : 60, right: 12, zIndex: 15,
-          background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)',
-          border: '1px solid #ef444444', borderRadius: 10,
-          padding: '10px 14px', maxWidth: 280, maxHeight: 200, overflowY: 'auto',
-        }}>
-          <div style={{ color: '#ef4444', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>
-            ⚠ AI Detection — {hotspots.length} Hotspot{hotspots.length > 1 ? 's' : ''}
-          </div>
-          {hotspots.slice(0, 3).map(hs => (
-            <div
-              key={hs.id}
-              onClick={() => {
-                const Cesium = (window as any).Cesium;
-                if (viewerRef.current && Cesium) {
-                  viewerRef.current.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(hs.lng, hs.lat, 20000),
-                    orientation: { heading: 0, pitch: Cesium.Math.toRadians(-50), roll: 0 },
-                    duration: 2,
-                  });
-                }
-              }}
-              style={{
-                padding: '6px 0', borderBottom: '1px solid #1e2a42', cursor: 'pointer',
-                fontSize: 10, color: '#cbd5e1', lineHeight: 1.5,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ color: hs.score >= 7 ? '#ef4444' : '#eab308', fontWeight: 700 }}>
-                  Score {hs.score}/10
-                </span>
-                <span style={{ color: '#667788' }}>{hs.boatCount} boats · {Math.round(hs.durationMinutes)}min</span>
-              </div>
-              <div style={{ color: '#8899aa', fontSize: 9 }}>
-                {hs.vessels.slice(0, 3).map(v => v.name).join(', ')}
-                {hs.vessels.length > 3 ? ` +${hs.vessels.length - 3}` : ''}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* AI Narration Panel moved to page layout below the map */}
 
       {/* ── Selected Spot Detail ── */}
       {selectedSpot && (
