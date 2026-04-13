@@ -1180,42 +1180,112 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           });
         }
 
-        // ── Scanned swath — shows coverage area on ocean surface ──
-        // Continuous ground track showing everywhere VIDAR has scanned
-        // Uses a thick center line (like a paint roller trail)
-        const swathSteps = 180; // Look back 3 hours
-        const swathTimeStep = 30 * 1000; // Every 30 seconds for smooth trail
-        const swathCenterLine: number[] = [];
-        let lastSwathAction = '';
+        // ── Scanned swath — shows actual 1km-wide coverage area on ocean surface ──
+        // Build scan corridor using perpendicular "rung" lines across the flight path
+        // This clearly shows exactly how much ocean has been scanned
+        const swathSteps = 240; // Look back full sortie
+        const swathTimeStep = 20 * 1000; // Every 20 seconds
+        const scanPositions: { lng: number; lat: number; heading: number }[] = [];
+
         for (let ts = swathSteps; ts >= 0; ts--) {
           const st = droneTimeMs - ts * swathTimeStep;
           const sp = getDronePosition(plan, st);
-          if (!sp) continue;
-          if (sp.action === 'scanning') {
-            swathCenterLine.push(sp.lng, sp.lat, 6);
-            lastSwathAction = 'scanning';
-          } else if (lastSwathAction === 'scanning' && swathCenterLine.length >= 6) {
-            // Break in scanning — create a segment
-            viewer.entities.add({
-              id: `drone-swath-${plan.id}-seg-${ts}`,
-              polyline: {
-                positions: Cesium.Cartesian3.fromDegreesArrayHeights([...swathCenterLine]),
-                width: 12, // Wide to represent scan width
-                material: new Cesium.Color(cr, cg, cb, 0.12),
-              },
-            });
-            swathCenterLine.length = 0;
-            lastSwathAction = '';
+          if (sp && sp.action === 'scanning') {
+            scanPositions.push({ lng: sp.lng, lat: sp.lat, heading: sp.heading });
           }
         }
-        // Final segment
-        if (swathCenterLine.length >= 6) {
+
+        if (scanPositions.length >= 2) {
+          // Build left and right edge polylines (offset ±0.5km from center)
+          const R = 6371;
+          const halfWidthKm = plan.scanWidthKm / 2;
+          const leftEdge: number[] = [];
+          const rightEdge: number[] = [];
+          const centerLine: number[] = [];
+
+          for (const sp of scanPositions) {
+            const perpRad = ((sp.heading + 90) * Math.PI) / 180;
+            const dLatL = (halfWidthKm * Math.cos(perpRad) / R) * (180 / Math.PI);
+            const dLngL = (halfWidthKm * Math.sin(perpRad) / (R * Math.cos(sp.lat * Math.PI / 180))) * (180 / Math.PI);
+            leftEdge.push(sp.lng + dLngL, sp.lat + dLatL, 6);
+            rightEdge.push(sp.lng - dLngL, sp.lat - dLatL, 6);
+            centerLine.push(sp.lng, sp.lat, 6);
+          }
+
+          // Left edge of scanned corridor — bright and thick
+          if (leftEdge.length >= 6) {
+            viewer.entities.add({
+              id: `drone-swath-L-${plan.id}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights(leftEdge),
+                width: 4,
+                material: new Cesium.Color(cr, cg, cb, 0.6),
+              },
+            });
+          }
+
+          // Right edge of scanned corridor
+          if (rightEdge.length >= 6) {
+            viewer.entities.add({
+              id: `drone-swath-R-${plan.id}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights(rightEdge),
+                width: 4,
+                material: new Cesium.Color(cr, cg, cb, 0.6),
+              },
+            });
+          }
+
+          // Center line — visible fill between edges
+          if (centerLine.length >= 6) {
+            viewer.entities.add({
+              id: `drone-swath-C-${plan.id}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights(centerLine),
+                width: 8,
+                material: new Cesium.Color(cr, cg, cb, 0.18),
+              },
+            });
+          }
+
+          // Cross-rungs every ~1.5km to fill corridor and show width clearly
+          const rungInterval = Math.max(1, Math.floor(scanPositions.length / 60));
+          for (let ri = 0; ri < scanPositions.length; ri += rungInterval) {
+            const sp = scanPositions[ri];
+            const perpRad = ((sp.heading + 90) * Math.PI) / 180;
+            const dLat = (halfWidthKm * Math.cos(perpRad) / R) * (180 / Math.PI);
+            const dLng = (halfWidthKm * Math.sin(perpRad) / (R * Math.cos(sp.lat * Math.PI / 180))) * (180 / Math.PI);
+            viewer.entities.add({
+              id: `drone-rung-${plan.id}-${ri}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+                  sp.lng + dLng, sp.lat + dLat, 6,
+                  sp.lng - dLng, sp.lat - dLat, 6,
+                ]),
+                width: 2,
+                material: new Cesium.Color(cr, cg, cb, 0.35),
+              },
+            });
+          }
+
+          // Coverage stats label at most recent scan position
+          const lastScan = scanPositions[scanPositions.length - 1];
+          const totalScanKm = scanPositions.length * (swathTimeStep / 1000) * (100 / 3600); // 100km/h
+          const areaSqKm = totalScanKm * plan.scanWidthKm;
           viewer.entities.add({
-            id: `drone-swath-${plan.id}-final`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights(swathCenterLine),
-              width: 14, // Wide to represent ~1km scan width
-              material: new Cesium.Color(cr, cg, cb, 0.15),
+            id: `drone-coverage-label-${plan.id}`,
+            position: Cesium.Cartesian3.fromDegrees(lastScan.lng, lastScan.lat, 300),
+            label: {
+              text: `Coverage: ${areaSqKm.toFixed(0)} km²`,
+              font: 'bold 11px monospace',
+              fillColor: new Cesium.Color(cr, cg, cb, 0.9),
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              verticalOrigin: Cesium.VerticalOrigin.TOP,
+              pixelOffset: new Cesium.Cartesian2(0, 8),
+              scaleByDistance: new Cesium.NearFarScalar(500, 1.2, 1e5, 0.4),
+              distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3e5),
             },
           });
         }
