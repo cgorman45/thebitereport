@@ -413,8 +413,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           id: `geofence-${spot.id}`,
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
-            width: isActive ? 2 : 0.8,
-            material: color.withAlpha(isActive ? 0.35 : 0.08),
+            width: isActive ? 1.5 : 0.5,
+            material: color.withAlpha(isActive ? 0.25 : 0.06),
             clampToGround: true,
           },
         });
@@ -422,7 +422,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         // 3D extruded transparent wall — always visible, brighter when selected/active
         const isSelected = selectedSpot?.id === spot.id;
         {
-          const wallHeight = isSelected ? 4000 : isActive ? 2000 : 800;
+          const wallHeight = isSelected ? 1500 : isActive ? 800 : 300;
 
           // Use polygon with extrudedHeight for true 3D transparent volume
           // Convert flat [lng, lat, lng, lat...] to hierarchy
@@ -438,9 +438,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
               hierarchy: new Cesium.PolygonHierarchy(polyPositions),
               height: 0,
               extrudedHeight: wallHeight,
-              material: color.withAlpha(isSelected ? 0.10 : isActive ? 0.06 : 0.03),
-              outline: true,
-              outlineColor: color.withAlpha(isSelected ? 0.5 : isActive ? 0.3 : 0.12),
+              material: color.withAlpha(isSelected ? 0.06 : isActive ? 0.03 : 0.01),
+              outline: false,
             },
           });
 
@@ -453,8 +452,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
                   i % 2 === 0 ? [v] : [v, wallHeight]
                 )
               ),
-              width: 1.5,
-              material: color.withAlpha(0.3),
+              width: 1,
+              material: color.withAlpha(isSelected ? 0.25 : 0.08),
             },
           });
         }
