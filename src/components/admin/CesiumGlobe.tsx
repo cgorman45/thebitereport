@@ -109,6 +109,98 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [showOrders, setShowOrders] = useState(true);
   const [showTrajectories, setShowTrajectories] = useState(true); // On by default — show boat history
 
+  // Order mode — click globe to place satellite imagery order
+  const [orderMode, setOrderMode] = useState(false);
+  const [orderClick, setOrderClick] = useState<{ lat: number; lng: number; screenX: number; screenY: number } | null>(null);
+  const [orderLoading, setOrderLoading] = useState<Record<string, boolean>>({});
+  const [orderResults, setOrderResults] = useState<Record<string, { success: boolean; message: string }>>({});
+
+  // Globe click handler — order mode picks coordinates
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const Cesium = (window as any).Cesium;
+    if (!viewer || !Cesium || !loaded) return;
+
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+
+    handler.setInputAction((click: any) => {
+      if (!orderMode) return;
+
+      const ray = viewer.camera.getPickRay(click.position);
+      if (!ray) return;
+      const cartesian = viewer.scene.globe.pick(ray, viewer.scene);
+      if (!cartesian) return;
+
+      const carto = Cesium.Cartographic.fromCartesian(cartesian);
+      const lat = Cesium.Math.toDegrees(carto.latitude);
+      const lng = Cesium.Math.toDegrees(carto.longitude);
+
+      // Clear previous results when clicking new location
+      setOrderResults({});
+      setOrderClick({
+        lat: Math.round(lat * 10000) / 10000,
+        lng: Math.round(lng * 10000) / 10000,
+        screenX: click.position.x,
+        screenY: click.position.y,
+      });
+
+      // Drop a marker at the click location
+      const markerId = 'order-click-marker';
+      const existing = viewer.entities.getById(markerId);
+      if (existing) viewer.entities.remove(existing);
+      viewer.entities.add({
+        id: markerId,
+        position: Cesium.Cartesian3.fromDegrees(lng, lat, 5),
+        point: { pixelSize: 12, color: Cesium.Color.fromCssColorString('#a855f7'), outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        label: {
+          text: `📍 ${lat.toFixed(4)}°, ${lng.toFixed(4)}°`,
+          font: 'bold 11px monospace',
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+        },
+      });
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    return () => handler.destroy();
+  }, [loaded, orderMode]);
+
+  // Order satellite imagery at clicked location
+  const placeOrder = async (tier: 'sentinel' | 'planetscope' | 'up42') => {
+    if (!orderClick) return;
+    setOrderLoading(prev => ({ ...prev, [tier]: true }));
+    try {
+      const res = await fetch('/api/demo/order-satellite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: orderClick.lat, lng: orderClick.lng, tier }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOrderResults(prev => ({ ...prev, [tier]: { success: true, message: `${data.tier_label} — ${data.scene?.id?.slice(0, 20) || 'ordered'}` } }));
+        // Refresh satellite orders list
+        fetch('/api/admin/satellite-orders').then(r => r.ok ? r.json() : null).then(d => { if (d?.orders) setSatOrders(d.orders); });
+      } else {
+        setOrderResults(prev => ({ ...prev, [tier]: { success: false, message: data.error || 'Order failed' } }));
+      }
+    } catch (err: any) {
+      setOrderResults(prev => ({ ...prev, [tier]: { success: false, message: err.message || 'Network error' } }));
+    } finally {
+      setOrderLoading(prev => ({ ...prev, [tier]: false }));
+    }
+  };
+
+  const placeAllOrders = async () => {
+    await Promise.all([
+      placeOrder('sentinel'),
+      placeOrder('planetscope'),
+      placeOrder('up42'),
+    ]);
+  };
+
   // Sync drone time to trajectory timeline
   useEffect(() => {
     if (!showDrones || trajectories.length === 0) return;
@@ -1619,7 +1711,9 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', cursor: orderMode ? 'crosshair' : undefined }}>
+      {/* Pulse animation for order mode */}
+      <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }`}</style>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
       {!loaded && !error && (
@@ -1790,6 +1884,37 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           🛰
         </button>
 
+        {/* Order Satellite Imagery — click-on-map mode */}
+        <button
+          onClick={() => {
+            const next = !orderMode;
+            setOrderMode(next);
+            if (!next) {
+              setOrderClick(null);
+              setOrderResults({});
+              // Remove click marker
+              const viewer = viewerRef.current;
+              if (viewer) {
+                const m = viewer.entities.getById('order-click-marker');
+                if (m) viewer.entities.remove(m);
+              }
+            }
+          }}
+          style={{
+            width: 40, height: 28, borderRadius: 6,
+            background: orderMode ? 'rgba(168,85,247,0.3)' : 'rgba(30,35,50,0.85)',
+            backdropFilter: 'blur(8px)',
+            border: orderMode ? '1px solid #a855f7' : '1px solid rgba(255,255,255,0.12)',
+            color: orderMode ? '#a855f7' : '#8899aa', fontSize: 9, fontWeight: 800,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)', letterSpacing: 0.5,
+            animation: orderMode ? 'pulse 2s infinite' : 'none',
+          }}
+          title={orderMode ? 'Click the map to select a location — click again to cancel' : 'Order satellite imagery — click a location on the map'}
+        >
+          📡
+        </button>
+
         {/* Center / Home */}
         <button
           onClick={() => { if (godsEyeView) setGodsEyeView(false); else resetView(); }}
@@ -1880,7 +2005,142 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         </>}
       </div>
 
-      {/* Fishing spot buttons moved to below the map in the page layout */}
+      {/* ── Order Mode Banner ── */}
+      {orderMode && !orderClick && (
+        <div style={{
+          position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
+          background: 'rgba(168,85,247,0.15)', backdropFilter: 'blur(12px)',
+          border: '1px solid #a855f7', borderRadius: 8,
+          padding: '8px 20px', display: 'flex', alignItems: 'center', gap: 10,
+          animation: 'pulse 2s infinite',
+        }}>
+          <span style={{ fontSize: 16 }}>📡</span>
+          <span style={{ color: '#e2e8f0', fontSize: 12, fontWeight: 600 }}>Click anywhere on the map to order satellite imagery</span>
+          <button
+            onClick={() => { setOrderMode(false); setOrderClick(null); setOrderResults({}); }}
+            style={{ background: 'none', border: 'none', color: '#a855f7', cursor: 'pointer', fontSize: 13, fontWeight: 700, marginLeft: 4 }}
+          >Cancel</button>
+        </div>
+      )}
+
+      {/* ── Satellite Order Panel ── */}
+      {orderClick && (
+        <div style={{
+          position: 'absolute', bottom: 120, right: 16, zIndex: 25,
+          background: 'rgba(10,15,26,0.96)', backdropFilter: 'blur(16px)',
+          border: '1px solid #a855f766', borderRadius: 12,
+          padding: '16px 20px', width: 340,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,85,247,0.1)',
+        }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13, marginBottom: 2 }}>Order Satellite Imagery</div>
+              <div style={{ color: '#667788', fontSize: 10, fontFamily: 'monospace' }}>
+                📍 {orderClick.lat}°N, {Math.abs(orderClick.lng).toFixed(4)}°W
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setOrderClick(null);
+                setOrderResults({});
+                setOrderMode(false);
+                const viewer = viewerRef.current;
+                if (viewer) { const m = viewer.entities.getById('order-click-marker'); if (m) viewer.entities.remove(m); }
+              }}
+              style={{ background: 'none', border: 'none', color: '#667788', cursor: 'pointer', fontSize: 16 }}
+            >✕</button>
+          </div>
+
+          {/* Tier Buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {([
+              { tier: 'sentinel' as const, label: 'Sentinel-2', res: '10m', provider: 'ESA / Copernicus', price: 'Free', color: '#0ea5e9', icon: '🌍' },
+              { tier: 'planetscope' as const, label: 'PlanetScope', res: '3m', provider: 'Planet Labs', price: '~$1/km²', color: '#ef4444', icon: '🔴' },
+              { tier: 'up42' as const, label: 'Pléiades', res: '50cm', provider: 'Airbus / UP42', price: '~$10/km²', color: '#a855f7', icon: '🟣' },
+            ]).map(t => {
+              const result = orderResults[t.tier];
+              const loading = orderLoading[t.tier];
+              return (
+                <button
+                  key={t.tier}
+                  onClick={() => !loading && !result && placeOrder(t.tier)}
+                  disabled={loading}
+                  style={{
+                    background: result?.success ? `${t.color}15` : loading ? `${t.color}08` : `${t.color}0a`,
+                    border: `1px solid ${result?.success ? t.color : t.color + '44'}`,
+                    borderRadius: 8, padding: '10px 14px',
+                    cursor: loading || result?.success ? 'default' : 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    transition: 'all 0.2s',
+                    opacity: loading ? 0.6 : 1,
+                  }}
+                >
+                  <span style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{t.icon}</span>
+                  <div style={{ flex: 1, textAlign: 'left' }}>
+                    <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 12 }}>{t.label} <span style={{ color: t.color, fontWeight: 600 }}>{t.res}</span></div>
+                    <div style={{ color: '#667788', fontSize: 9, marginTop: 1 }}>{t.provider} · {t.price}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', minWidth: 60 }}>
+                    {loading ? (
+                      <span style={{ color: t.color, fontSize: 10, fontWeight: 600 }}>Ordering...</span>
+                    ) : result?.success ? (
+                      <span style={{ color: '#22c55e', fontSize: 10, fontWeight: 700 }}>✓ Ordered</span>
+                    ) : result ? (
+                      <span style={{ color: '#ef4444', fontSize: 9 }}>✗ Failed</span>
+                    ) : (
+                      <span style={{ color: t.color, fontSize: 11, fontWeight: 700 }}>Order →</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Order All button */}
+          <button
+            onClick={() => {
+              const anyLoading = Object.values(orderLoading).some(v => v);
+              const allDone = ['sentinel', 'planetscope', 'up42'].every(t => orderResults[t]?.success);
+              if (!anyLoading && !allDone) placeAllOrders();
+            }}
+            style={{
+              width: '100%', marginTop: 10, padding: '10px 0',
+              background: Object.keys(orderResults).length === 3
+                ? 'rgba(34,197,94,0.15)' : 'linear-gradient(135deg, #0ea5e9, #a855f7)',
+              border: Object.keys(orderResults).length === 3
+                ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 8,
+              color: '#fff', fontWeight: 700, fontSize: 12,
+              cursor: Object.values(orderLoading).some(v => v) ? 'wait' : 'pointer',
+              letterSpacing: 0.3,
+            }}
+          >
+            {Object.values(orderLoading).some(v => v)
+              ? '⏳ Placing orders...'
+              : ['sentinel', 'planetscope', 'up42'].every(t => orderResults[t]?.success)
+                ? '✓ All 3 Ordered'
+                : '🛰 Order All 3 Tiers'}
+          </button>
+
+          {/* Results summary */}
+          {Object.keys(orderResults).length > 0 && (
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #1e2a42' }}>
+              {Object.entries(orderResults).map(([tier, r]) => (
+                <div key={tier} style={{ fontSize: 9, color: r.success ? '#22c55e' : '#ef4444', marginBottom: 2, fontFamily: 'monospace' }}>
+                  {r.success ? '✓' : '✗'} {tier}: {r.message}
+                </div>
+              ))}
+              <a
+                href="/admin/satellite-review"
+                style={{ display: 'block', marginTop: 6, color: '#a855f7', fontSize: 10, fontWeight: 600, textDecoration: 'none' }}
+              >
+                View all orders →
+              </a>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Time Scrubber (for trajectory replay) ── */}
       {showTrajectories && trajectories.length > 0 && (
