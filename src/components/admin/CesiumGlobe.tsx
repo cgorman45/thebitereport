@@ -90,33 +90,23 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [showDrones, setShowDrones] = useState(false); // Phase 2 toggle
   const [droneFlightPlans] = useState<DroneFlightPlan[]>(() => generateAllFlightPlans());
   const [droneTimeMs, setDroneTimeMs] = useState(5 * 60 * 60 * 1000); // Start at 5am
-  const [dronePlaying, setDronePlaying] = useState(false);
+  // dronePlaying removed — drones sync to main trajectory timeline
   const [showSatellites, setShowSatellites] = useState(false);
   const [showVessels, setShowVessels] = useState(true);
   const [showSpots, setShowSpots] = useState(true);
   const [showOrders, setShowOrders] = useState(true);
   const [showTrajectories, setShowTrajectories] = useState(true); // On by default — show boat history
 
-  // Drone animation loop
+  // Sync drone time to trajectory timeline
   useEffect(() => {
-    if (!dronePlaying || !showDrones) return;
-    let animId: number;
-    let lastTime = performance.now();
-
-    const animate = (now: number) => {
-      const dt = now - lastTime;
-      lastTime = now;
-      // 1 second real time = 2 minutes sim time (480x speed for 8hr in ~1min)
-      setDroneTimeMs(t => {
-        const newT = t + dt * 480;
-        if (newT > 21 * 60 * 60 * 1000) return 5 * 60 * 60 * 1000; // Loop back to 5am
-        return newT;
-      });
-      animId = requestAnimationFrame(animate);
-    };
-    animId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animId);
-  }, [dronePlaying, showDrones]);
+    if (!showDrones || trajectories.length === 0) return;
+    const snap = trajectories[Math.min(trajIndex, trajectories.length - 1)];
+    if (snap) {
+      const d = new Date(snap.timestamp);
+      const msFromMidnight = (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000;
+      setDroneTimeMs(msFromMidnight);
+    }
+  }, [showDrones, trajIndex, trajectories]);
 
   // Close search on outside click
   useEffect(() => {
@@ -1012,10 +1002,50 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           });
         }
 
-        // Flight path trail (past positions)
+        // Scanned area trail — wide polygon showing everywhere VIDAR has covered
+        const scanTrailLeft: [number, number][] = [];
+        const scanTrailRight: [number, number][] = [];
+        const trailSteps = 60;
+        const trailTimeStep = 2 * 60 * 1000;
+
+        for (let ts = trailSteps; ts >= 0; ts--) {
+          const trailT = droneTimeMs - ts * trailTimeStep;
+          const trailPos = getDronePosition(plan, trailT);
+          if (!trailPos) continue;
+
+          // Build left/right edges of scan swath
+          const headingRad = (trailPos.heading * Math.PI) / 180;
+          const perpRad = headingRad + Math.PI / 2;
+          const halfW = plan.scanWidthKm / 2;
+          const R = 6371;
+
+          const dLatL = (halfW * Math.cos(perpRad)) / R * (180 / Math.PI);
+          const dLngL = (halfW * Math.sin(perpRad)) / (R * Math.cos(trailPos.lat * Math.PI / 180)) * (180 / Math.PI);
+          const dLatR = (-halfW * Math.cos(perpRad)) / R * (180 / Math.PI);
+          const dLngR = (-halfW * Math.sin(perpRad)) / (R * Math.cos(trailPos.lat * Math.PI / 180)) * (180 / Math.PI);
+
+          scanTrailLeft.push([trailPos.lng + dLngL, trailPos.lat + dLatL]);
+          scanTrailRight.push([trailPos.lng + dLngR, trailPos.lat + dLatR]);
+        }
+
+        // Combine left + reversed right to form polygon
+        if (scanTrailLeft.length >= 3) {
+          const scanPoly = [...scanTrailLeft, ...scanTrailRight.reverse()];
+          const scanPositions = scanPoly.map(([lng, lat]) => Cesium.Cartesian3.fromDegrees(lng, lat));
+
+          viewer.entities.add({
+            id: `drone-scanned-${plan.id}`,
+            polygon: {
+              hierarchy: new Cesium.PolygonHierarchy(scanPositions),
+              height: 0,
+              material: droneColor.withAlpha(0.06),
+              outline: false,
+            },
+          });
+        }
+
+        // Flight path center line trail
         const trailPoints: number[] = [];
-        const trailSteps = 30;
-        const trailTimeStep = 2 * 60 * 1000; // 2 min steps
         for (let ts = trailSteps; ts >= 0; ts--) {
           const trailT = droneTimeMs - ts * trailTimeStep;
           const trailPos = getDronePosition(plan, trailT);
@@ -1027,8 +1057,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             id: `drone-trail-${plan.id}`,
             polyline: {
               positions: Cesium.Cartesian3.fromDegreesArrayHeights(trailPoints),
-              width: 2,
-              material: droneColor.withAlpha(0.4),
+              width: 1.5,
+              material: droneColor.withAlpha(0.3),
             },
           });
         }
@@ -1319,33 +1349,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         </div>
       )}
 
-      {/* ── Phase 2 Drone Control ── */}
-      {showDrones && (
-        <div style={{
-          position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
-          background: 'rgba(10,15,26,0.95)', backdropFilter: 'blur(12px)',
-          border: '1px solid #00d4ff44', borderRadius: 10,
-          padding: '6px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 11,
-        }}>
-          <span style={{ color: '#00d4ff', fontWeight: 700, fontSize: 12 }}>🛩 PHASE 2 — VIDAR DRONE OPS</span>
-          <button
-            onClick={() => setDronePlaying(p => !p)}
-            style={{ background: 'none', border: 'none', color: '#00d4ff', fontSize: 14, cursor: 'pointer' }}
-          >{dronePlaying ? '⏸' : '▶'}</button>
-          <span style={{ color: '#e2e8f0', fontFamily: 'monospace', fontWeight: 700 }}>
-            {String(Math.floor(droneTimeMs / 3600000)).padStart(2, '0')}:
-            {String(Math.floor((droneTimeMs % 3600000) / 60000)).padStart(2, '0')}
-          </span>
-          <input
-            type="range" min={5 * 3600000} max={21 * 3600000} value={droneTimeMs}
-            onChange={e => setDroneTimeMs(parseInt(e.target.value))}
-            style={{ width: 120, accentColor: '#00d4ff' }}
-          />
-          <span style={{ color: '#667788', fontSize: 9 }}>
-            S1: 05:00-13:00 | S2: 13:00-21:00
-          </span>
-        </div>
-      )}
+      {/* Phase 2 drones synced to main timeline — no separate control needed */}
 
       {/* ── Geofence Admin Panel (shows when a spot is selected) ── */}
       {selectedSpot && (
