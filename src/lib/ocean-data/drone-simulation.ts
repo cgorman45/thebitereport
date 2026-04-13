@@ -7,8 +7,8 @@
  *
  * Each drone:
  * - Speed: 100 km/h
- * - Altitude: 1500m
- * - VIDAR scan width: ~2km swath below
+ * - Altitude: 1500ft (457m) above sea level
+ * - VIDAR scan width: ~1km swath below (pyramid scan pattern)
  * - Two 8-hour sorties per day (05:00-13:00, 13:00-21:00)
  */
 
@@ -75,8 +75,8 @@ function generateFlightPlan(
   const startHour = sortie === 1 ? 5 : 13;
   const flightDurationMs = 8 * 60 * 60 * 1000; // 8 hours
   const speedKmH = 100;
-  const altitude = 1500;
-  const scanWidthKm = 2;
+  const altitude = 457; // 1500ft in meters
+  const scanWidthKm = 1;
 
   const spots = getSpotsInRange(100, direction);
   const waypoints: DroneWaypoint[] = [];
