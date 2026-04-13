@@ -55,8 +55,8 @@ export async function searchScenes(
   const now = new Date();
   const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
 
-  // Create a small bounding box (~2km) around the point
-  const delta = 0.01; // ~1km at this latitude
+  // Create a small bounding box (~1km) around the point for scene search
+  const delta = 0.005; // ~0.5km each side = ~1km total
   const bbox = [lng - delta, lat - delta, lng + delta, lat + delta];
 
   const searchBody = {
@@ -135,6 +135,19 @@ export async function orderScene(
   // Product bundle differs by item type
   const productBundle = itemType === 'SkySatCollect' ? 'visual' : 'visual';
 
+  // 1km x 1km clip AOI around the target point
+  const clipDelta = 0.005; // ~0.5km each side
+  const clipAoi = {
+    type: 'Polygon' as const,
+    coordinates: [[
+      [lng - clipDelta, lat - clipDelta],
+      [lng + clipDelta, lat - clipDelta],
+      [lng + clipDelta, lat + clipDelta],
+      [lng - clipDelta, lat + clipDelta],
+      [lng - clipDelta, lat - clipDelta],
+    ]],
+  };
+
   const orderBody = {
     name,
     products: [
@@ -143,6 +156,9 @@ export async function orderScene(
         item_type: itemType,
         product_bundle: productBundle,
       },
+    ],
+    tools: [
+      { clip: { aoi: clipAoi } },
     ],
   };
 

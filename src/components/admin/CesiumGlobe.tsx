@@ -2055,9 +2055,9 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           {/* Tier Buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {([
-              { tier: 'sentinel' as const, label: 'Sentinel-2', res: '10m', provider: 'ESA / Copernicus', price: 'Free', color: '#0ea5e9', icon: '🌍' },
-              { tier: 'planetscope' as const, label: 'PlanetScope', res: '3m', provider: 'Planet Labs', price: '~$1/km²', color: '#ef4444', icon: '🔴' },
-              { tier: 'up42' as const, label: 'Pléiades', res: '50cm', provider: 'Airbus / UP42', price: '~$10/km²', color: '#a855f7', icon: '🟣' },
+              { tier: 'sentinel' as const, label: 'Sentinel-2', res: '10m', provider: 'ESA / Copernicus · 4km²', price: 'Free', color: '#0ea5e9', icon: '🌍' },
+              { tier: 'planetscope' as const, label: 'PlanetScope', res: '3m', provider: 'Planet Labs · 1km² clip', price: '~$1/km²', color: '#ef4444', icon: '🔴' },
+              { tier: 'up42' as const, label: 'Pléiades', res: '50cm', provider: 'Airbus / UP42 · 1km² clip', price: '~€4/km²', color: '#a855f7', icon: '🟣' },
             ]).map(t => {
               const result = orderResults[t.tier];
               const loading = orderLoading[t.tier];
