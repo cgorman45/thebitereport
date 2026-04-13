@@ -139,8 +139,11 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       // Save current FOV
       defaultFov.current = Cesium.Math.toDegrees(viewer.camera.frustum.fov);
 
-      // Wide FOV for fish-eye effect (85° instead of default ~60°)
-      viewer.camera.frustum.fov = Cesium.Math.toRadians(85);
+      // Extreme wide FOV for fish-eye effect (120°) — shows satellites + ground together
+      viewer.camera.frustum.fov = Cesium.Math.toRadians(120);
+
+      // Near plane must be adjusted for extreme FOV to avoid clipping
+      viewer.camera.frustum.near = 1;
 
       // Enable stars and atmosphere
       viewer.scene.skyBox.show = true;
@@ -151,12 +154,14 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       setShowSatellites(true);
       setShowHotspots(true);
 
-      // Fly to orbital altitude — centered on SoCal fishing grounds
+      // Position camera at ~1200km — between ground and satellite orbits (600-800km)
+      // Shallow pitch so satellites are visible "above" and ground is "below"
+      // This creates the WorldView-style perspective where you see both
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(-118.0, 32.5, 2500000), // 2500km altitude
+        destination: Cesium.Cartesian3.fromDegrees(-118.5, 30.0, 1200000), // 1200km, south of fishing area
         orientation: {
-          heading: Cesium.Math.toRadians(340),
-          pitch: Cesium.Math.toRadians(-70),
+          heading: Cesium.Math.toRadians(10),   // Looking slightly NNE
+          pitch: Cesium.Math.toRadians(-40),     // Shallow angle — see satellites above horizon
           roll: 0,
         },
         duration: 3,
@@ -1044,19 +1049,19 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           position: Cesium.Cartesian3.fromDegrees(sat.lng, sat.lat, altMeters),
           billboard: {
             image: 'data:image/svg+xml,' + encodeURIComponent(satSvg),
-            width: 22, height: 22,
-            scaleByDistance: new Cesium.NearFarScalar(1e5, 2, 1e7, 0.5),
+            width: 28, height: 28,
+            scaleByDistance: new Cesium.NearFarScalar(5e4, 3, 5e6, 0.8),
           },
           label: {
             text: `${sat.name}\n${sat.resolution} · ${sat.provider}`,
-            font: 'bold 10px monospace',
+            font: 'bold 12px monospace',
             fillColor: new Cesium.Color(sr, sg, sb, 1),
             outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
+            outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            pixelOffset: new Cesium.Cartesian2(0, -16),
-            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.2, 1e7, 0.3),
+            pixelOffset: new Cesium.Cartesian2(0, -20),
+            scaleByDistance: new Cesium.NearFarScalar(5e4, 1.5, 5e6, 0.5),
           },
         });
 
@@ -1070,7 +1075,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           [sat.lng - halfSwathDeg, sat.lat + halfSwathDeg * 0.5],
         ];
 
-        // 4 cone lines from satellite down to footprint corners
+        // 4 cone lines from satellite down to footprint corners — bright and visible
         for (let ci = 0; ci < 4; ci++) {
           viewer.entities.add({
             id: `sat-cone-${sat.id}-${ci}`,
@@ -1079,11 +1084,25 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
                 sat.lng, sat.lat, altMeters,
                 footprint[ci][0], footprint[ci][1], 15,
               ]),
-              width: 1,
-              material: new Cesium.Color(sr, sg, sb, 0.2),
+              width: 2,
+              material: new Cesium.Color(sr, sg, sb, 0.45),
             },
           });
         }
+
+        // Cross lines inside cone for visual density (like WorldView reference)
+        const fpCenter = [(footprint[0][0] + footprint[2][0]) / 2, (footprint[0][1] + footprint[2][1]) / 2];
+        viewer.entities.add({
+          id: `sat-cone-center-${sat.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+              sat.lng, sat.lat, altMeters,
+              fpCenter[0], fpCenter[1], 15,
+            ]),
+            width: 1.5,
+            material: new Cesium.Color(sr, sg, sb, 0.3),
+          },
+        });
 
         // Ground footprint rectangle
         const fpFlat: number[] = [];
