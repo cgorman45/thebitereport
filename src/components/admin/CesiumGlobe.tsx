@@ -44,6 +44,15 @@ function vesselArrowSvg(color: string, size: number = 20): string {
   return 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 
+// Safe color helper — NEVER use .withAlpha() on Cesium.Color over Google 3D Tiles ocean.
+// It renders as white/opaque blocks. Always use explicit new Cesium.Color(r,g,b,a).
+function safeColor(Cesium: any, hex: string, alpha: number): any {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return new Cesium.Color(r, g, b, alpha);
+}
+
 // Load CesiumJS from CDN
 function loadCesiumFromCDN(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -97,14 +106,24 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const [showOrders, setShowOrders] = useState(true);
   const [showTrajectories, setShowTrajectories] = useState(true); // On by default — show boat history
 
-  // Sync drone time to trajectory timeline
+  // Sync drone time to trajectory timeline — with smooth interpolation
   useEffect(() => {
     if (!showDrones || trajectories.length === 0) return;
-    const snap = trajectories[Math.min(trajIndex, trajectories.length - 1)];
+    const idx = Math.min(trajIndex, trajectories.length - 1);
+    const snap = trajectories[idx];
+    const nextSnap = trajectories[Math.min(idx + 1, trajectories.length - 1)];
     if (snap) {
-      const d = new Date(snap.timestamp);
-      const msFromMidnight = (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000;
-      setDroneTimeMs(msFromMidnight);
+      const d1 = new Date(snap.timestamp);
+      const ms1 = (d1.getHours() * 3600 + d1.getMinutes() * 60 + d1.getSeconds()) * 1000;
+      if (nextSnap && nextSnap !== snap) {
+        const d2 = new Date(nextSnap.timestamp);
+        const ms2 = (d2.getHours() * 3600 + d2.getMinutes() * 60 + d2.getSeconds()) * 1000;
+        // Interpolate between snapshots using sub-index progress
+        const t = trajProgressRef.current;
+        setDroneTimeMs(ms1 + (ms2 - ms1) * t);
+      } else {
+        setDroneTimeMs(ms1);
+      }
     }
   }, [showDrones, trajIndex, trajectories]);
 
@@ -182,16 +201,16 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         id: 'coverage-area',
         name: 'Coverage Area',
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray([
-            -120.5, 28.7, -115.0, 28.7, -115.0, 34.3, -120.5, 34.3, -120.5, 28.7,
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+            -120.5, 28.7, 10, -115.0, 28.7, 10, -115.0, 34.3, 10, -120.5, 34.3, 10, -120.5, 28.7, 10,
           ]),
           width: 2,
-          material: Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.3),
-          clampToGround: true,
+          material: safeColor(Cesium, '#00d4ff', 0.3),
         },
       });
 
       viewerRef.current = viewer;
+      (window as any).__cesiumViewer = viewer;
       setLoaded(true);
     }).catch(err => setError(err.message));
 
@@ -285,6 +304,29 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             }
           }
         }
+
+        // Smoothly interpolate drone time between trajectory snapshots
+        if (showDrones) {
+          const d1 = new Date(curr.timestamp);
+          const ms1 = (d1.getHours() * 3600 + d1.getMinutes() * 60 + d1.getSeconds()) * 1000;
+          const d2 = new Date(next.timestamp);
+          const ms2 = (d2.getHours() * 3600 + d2.getMinutes() * 60 + d2.getSeconds()) * 1000;
+          const smoothDroneTime = ms1 + (ms2 - ms1) * t;
+          setDroneTimeMs(smoothDroneTime);
+
+          // Also smoothly move drone entities between their waypoint positions
+          for (const plan of droneFlightPlans) {
+            const pos = getDronePosition(plan, smoothDroneTime);
+            if (!pos) continue;
+            const droneEntity = viewer.entities.getById(`drone-${plan.id}`);
+            if (droneEntity) {
+              droneEntity.position = Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, pos.altitude);
+              if (droneEntity.billboard) {
+                droneEntity.billboard.rotation = -Cesium.Math.toRadians(pos.heading);
+              }
+            }
+          }
+        }
       }
 
       animId = requestAnimationFrame(animate);
@@ -292,7 +334,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
     animId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animId);
-  }, [trajPlaying, trajectories, trajIndex, playbackSpeed]);
+  }, [trajPlaying, trajectories, trajIndex, playbackSpeed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fly to fishing spot — offset camera slightly so the spot is centered in view
   const flyToSpot = useCallback((spot: FishingSpot) => {
@@ -485,26 +527,12 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           const r = parseInt(hexColor.slice(1, 3), 16) / 255;
           const g = parseInt(hexColor.slice(3, 5), 16) / 255;
           const b = parseInt(hexColor.slice(5, 7), 16) / 255;
-          const wallAlpha = isSelected ? 0.12 : 0.06;
 
-          // Extruded wall from 300m to wallHeight — above 3D tiles
-          const polyPositions = [];
-          for (let pi = 0; pi < geofencePoints.length; pi += 2) {
-            polyPositions.push(Cesium.Cartesian3.fromDegrees(geofencePoints[pi], geofencePoints[pi + 1]));
-          }
+          // NOTE: Cesium polygon entities with alpha render as WHITE BLOCKS over Google 3D Tiles.
+          // This is a known CesiumJS bug. NEVER use polygon entities with transparency over 3D tiles.
+          // Use polyline outlines only.
 
-          viewer.entities.add({
-            id: `geofence-fill-${spot.id}`,
-            polygon: {
-              hierarchy: new Cesium.PolygonHierarchy(polyPositions),
-              height: 300,
-              extrudedHeight: wallHeight,
-              material: new Cesium.Color(r, g, b, wallAlpha),
-              outline: false,
-            },
-          });
-
-          // Ground ring polyline (always clean, never white)
+          // Ground ring polyline
           const groundPositions = [];
           for (let pi = 0; pi < geofencePoints.length; pi += 2) {
             groundPositions.push(geofencePoints[pi], geofencePoints[pi + 1], 100);
@@ -531,6 +559,21 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
               material: new Cesium.Color(r, g, b, isSelected ? 0.5 : 0.3),
             },
           });
+
+          // Vertical pillars connecting ground to top ring (every N points for wireframe effect)
+          const pillarStep = Math.max(1, Math.floor(geofencePoints.length / (2 * (isSelected ? 16 : 8))));
+          for (let pi = 0; pi < geofencePoints.length - 1; pi += 2 * pillarStep) {
+            const lng = geofencePoints[pi];
+            const lat = geofencePoints[pi + 1];
+            viewer.entities.add({
+              id: `geofence-pillar-${spot.id}-${pi}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights([lng, lat, 100, lng, lat, wallHeight]),
+                width: 1,
+                material: new Cesium.Color(r, g, b, isSelected ? 0.4 : 0.2),
+              },
+            });
+          }
         }
 
         // Boat count label — only when active with boats inside
@@ -574,7 +617,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           position: Cesium.Cartesian3.fromDegrees(wp.lng, wp.lat, 50),
           point: {
             pixelSize: 6,
-            color: color.withAlpha(0.7),
+            color: safeColor(Cesium, chartColors[wp.chart] || '#eab308', 0.7),
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 1,
             scaleByDistance: new Cesium.NearFarScalar(1e3, 1.2, 1e6, 0.3),
@@ -616,7 +659,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         if (isParked) {
           // Parked >2hrs: tiny gray dot, almost invisible
           pixelSize = 2;
-          color = Cesium.Color.fromCssColorString('#4a5568').withAlpha(0.2);
+          color = safeColor(Cesium, '#4a5568', 0.2);
         } else if (isStopped) {
           // Recently stopped: notable but not dominant
           pixelSize = 5;
@@ -630,7 +673,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         } else {
           // Transit: medium blue
           pixelSize = 4;
-          color = Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.5);
+          color = safeColor(Cesium, '#38bdf8', 0.5);
         }
 
         // Use arrow billboards rotated to heading (MarineTraffic style)
@@ -663,7 +706,15 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       const isNearLive = trajIndex >= trajectories.length - 5; // Within last 5 snapshots = "live"
 
       if (snap) {
-        for (const v of snap.vessels) {
+        // Deduplicate vessels by MMSI — API may return duplicate entries
+        const seenMmsi = new Set<number>();
+        const uniqueVessels = snap.vessels.filter((v: any) => {
+          if (seenMmsi.has(v.mmsi)) return false;
+          seenMmsi.add(v.mmsi);
+          return true;
+        });
+
+        for (const v of uniqueVessels) {
           const isStopped = v.speed < 1.5;
           const isFishing = v.speed >= 0.5 && v.speed < 3;
 
@@ -681,13 +732,13 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
           if (isParked) {
             pixelSize = 2;
-            color = Cesium.Color.fromCssColorString('#4a5568').withAlpha(0.15);
+            color = safeColor(Cesium, '#4a5568', 0.15);
           } else if (isFishing) {
             pixelSize = 7;
             color = Cesium.Color.fromCssColorString('#eab308'); // Yellow = fishing
           } else if (isStopped) {
             pixelSize = 4;
-            color = Cesium.Color.fromCssColorString('#f97316').withAlpha(0.6);
+            color = safeColor(Cesium, '#f97316', 0.6);
           } else {
             pixelSize = 5;
             color = Cesium.Color.fromCssColorString('#38bdf8');
@@ -728,65 +779,64 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           }
         }
 
+        // Helper: convert [lng,lat] pairs to [lng,lat,alt,...] for fromDegreesArrayHeights
+        // clampToGround doesn't work over ocean with Google 3D Tiles — use small altitude instead
+        const withHeight = (coords: [number, number][], alt: number) =>
+          coords.flatMap(([lng, lat]) => [lng, lat, alt]);
+
+        let trailCount = 0;
         for (const [mmsi, trail] of Object.entries(trails)) {
           if (trail.coords.length < 2 || !trail.wasMoving) continue;
+          try {
+            const segCount = trail.coords.length;
+            const third = Math.max(2, Math.floor(segCount / 3));
 
-          // Single polyline per vessel for the full trail (performance)
-          // Opacity based on how recent — older trails are more transparent
-          const age = trail.coords.length;
-          const maxOpacity = 0.7;
-          const minOpacity = 0.05;
+            // Old segment — very faint
+            if (segCount > 4) {
+              const oldCoords = trail.coords.slice(0, third);
+              if (oldCoords.length >= 2) {
+                viewer.entities.add({
+                  id: `traj-trail-${mmsi}-old`,
+                  polyline: {
+                    positions: Cesium.Cartesian3.fromDegreesArrayHeights(withHeight(oldCoords, 5)),
+                    width: 1,
+                    material: safeColor(Cesium, '#88ccff', 0.15),
+                  },
+                });
+              }
+            }
 
-          // Split into 3 segments: old (faint), mid, recent (bright)
-          const segCount = trail.coords.length;
-          const third = Math.max(2, Math.floor(segCount / 3));
+            // Mid segment — moderate
+            if (segCount > 4) {
+              const midCoords = trail.coords.slice(Math.max(0, third - 1), third * 2);
+              if (midCoords.length >= 2) {
+                viewer.entities.add({
+                  id: `traj-trail-${mmsi}-mid`,
+                  polyline: {
+                    positions: Cesium.Cartesian3.fromDegreesArrayHeights(withHeight(midCoords, 5)),
+                    width: 1.5,
+                    material: safeColor(Cesium, '#88ccff', 0.35),
+                  },
+                });
+              }
+            }
 
-          // Old segment — very faint
-          if (segCount > 4) {
-            const oldCoords = trail.coords.slice(0, third);
-            if (oldCoords.length >= 2) {
+            // Recent segment — bright
+            const recentCoords = trail.coords.slice(Math.max(0, segCount - third - 1));
+            if (recentCoords.length >= 2) {
               viewer.entities.add({
-                id: `traj-trail-${mmsi}-old`,
+                id: `traj-trail-${mmsi}-new`,
                 polyline: {
-                  positions: Cesium.Cartesian3.fromDegreesArray(oldCoords.flatMap(c => c)),
-                  width: 1,
-                  material: Cesium.Color.fromCssColorString('#88ccff').withAlpha(0.08),
-                  clampToGround: true,
+                  positions: Cesium.Cartesian3.fromDegreesArrayHeights(withHeight(recentCoords, 5)),
+                  width: 2.5,
+                  material: safeColor(Cesium, isNearLive ? '#ffffff' : '#88ddff', 0.6),
                 },
               });
             }
-          }
-
-          // Mid segment — moderate
-          if (segCount > 4) {
-            const midCoords = trail.coords.slice(Math.max(0, third - 1), third * 2);
-            if (midCoords.length >= 2) {
-              viewer.entities.add({
-                id: `traj-trail-${mmsi}-mid`,
-                polyline: {
-                  positions: Cesium.Cartesian3.fromDegreesArray(midCoords.flatMap(c => c)),
-                  width: 1.5,
-                  material: Cesium.Color.fromCssColorString('#88ccff').withAlpha(0.2),
-                  clampToGround: true,
-                },
-              });
-            }
-          }
-
-          // Recent segment — bright
-          const recentCoords = trail.coords.slice(Math.max(0, segCount - third - 1));
-          if (recentCoords.length >= 2) {
-            viewer.entities.add({
-              id: `traj-trail-${mmsi}-new`,
-              polyline: {
-                positions: Cesium.Cartesian3.fromDegreesArray(recentCoords.flatMap(c => c)),
-                width: 2,
-                material: Cesium.Color.fromCssColorString(isNearLive ? '#ffffff' : '#88ddff').withAlpha(0.5),
-                clampToGround: true,
-              },
-            });
-          }
+            trailCount++;
+          } catch { /* skip bad trail data */ }
         }
+        // Trails rendered: ${trailCount} at trajIndex ${trajIndex}
       }
     }
 
@@ -829,16 +879,15 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         viewer.entities.add({
           id: `order-area-${order.id}`,
           polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArray([
-              order.lng - dLng, order.lat - dLat,
-              order.lng + dLng, order.lat - dLat,
-              order.lng + dLng, order.lat + dLat,
-              order.lng - dLng, order.lat + dLat,
-              order.lng - dLng, order.lat - dLat,
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+              order.lng - dLng, order.lat - dLat, 10,
+              order.lng + dLng, order.lat - dLat, 10,
+              order.lng + dLng, order.lat + dLat, 10,
+              order.lng - dLng, order.lat + dLat, 10,
+              order.lng - dLng, order.lat - dLat, 10,
             ]),
             width: 2,
-            material: color.withAlpha(0.6),
-            clampToGround: true,
+            material: safeColor(Cesium, tierColor, 0.6),
           },
         });
       }
@@ -857,16 +906,15 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           const R = 6371000;
           const dLat = (pulseSize * Math.cos(rad) / R) * (180 / Math.PI);
           const dLng = (pulseSize * Math.sin(rad) / (R * Math.cos(hs.lat * Math.PI / 180))) * (180 / Math.PI);
-          ringPoints.push(hs.lng + dLng, hs.lat + dLat);
+          ringPoints.push(hs.lng + dLng, hs.lat + dLat, 10);
         }
 
         viewer.entities.add({
           id: `hotspot-ring-${hs.id}`,
           polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArray(ringPoints),
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights(ringPoints),
             width: 3,
-            material: Cesium.Color.fromCssColorString(color).withAlpha(0.6),
-            clampToGround: true,
+            material: safeColor(Cesium, color, 0.6),
           },
         });
 
@@ -927,7 +975,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArrayHeights([sat.lng, sat.lat, altMeters, sat.lng, sat.lat, 0]),
             width: 1,
-            material: color.withAlpha(0.15),
+            material: safeColor(Cesium, sat.color, 0.15),
           },
         });
       }
@@ -943,7 +991,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             if (segCoords.length >= 6) {
               viewer.entities.add({
                 id: `orbit-${orbit.id}-${segIdx++}`,
-                polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1, material: color.withAlpha(0.3) },
+                polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1, material: safeColor(Cesium, orbit.color, 0.3) },
               });
             }
             segCoords = [];
@@ -954,7 +1002,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         if (segCoords.length >= 6) {
           viewer.entities.add({
             id: `orbit-${orbit.id}-final`,
-            polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1, material: color.withAlpha(0.3) },
+            polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights(segCoords), width: 1, material: safeColor(Cesium, orbit.color, 0.3) },
           });
         }
       }
@@ -974,34 +1022,61 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         const cr = parseInt(hexC.slice(1, 3), 16) / 255;
         const cg = parseInt(hexC.slice(3, 5), 16) / 255;
         const cb = parseInt(hexC.slice(5, 7), 16) / 255;
+        const isScanning = pos.action === 'scanning';
+        const isTransit = pos.action === 'transit';
 
-        // Drone body — billboard arrow rotated to heading
+        // ── Drone SVG icon (custom UAV shape, not vessel arrow) ──
+        const droneSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+          <g fill="${plan.color}" stroke="rgba(0,0,0,0.6)" stroke-width="0.8">
+            <polygon points="16,2 20,12 16,10 12,12" opacity="0.9"/>
+            <rect x="6" y="12" width="20" height="3" rx="1.5"/>
+            <polygon points="16,15 20,24 16,22 12,24" opacity="0.9"/>
+            <circle cx="7" cy="13.5" r="3" fill="none" stroke="${plan.color}" stroke-width="1" opacity="0.6"/>
+            <circle cx="25" cy="13.5" r="3" fill="none" stroke="${plan.color}" stroke-width="1" opacity="0.6"/>
+          </g>
+        </svg>`;
+        const droneImg = 'data:image/svg+xml,' + encodeURIComponent(droneSvg);
+
+        // Drone body — large and visible from far away
         viewer.entities.add({
           id: `drone-${plan.id}`,
           name: `Penguin B VTOL — ${plan.name}`,
           description: `<div style="font-family:sans-serif"><p><b>Aircraft:</b> Penguin B VTOL</p><p><b>Sensor:</b> VIDAR (Visual Detection and Ranging)</p><p><b>Altitude:</b> ${pos.altitude.toFixed(0)}m (${Math.round(pos.altitude * 3.281)}ft)</p><p><b>Action:</b> ${pos.action}</p>${pos.spotName ? `<p><b>Target:</b> ${pos.spotName}</p>` : ''}</div>`,
           position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, pos.altitude),
           billboard: {
-            image: vesselArrowSvg(plan.color, 24),
-            width: 20,
-            height: 20,
+            image: droneImg,
+            width: 32,
+            height: 32,
             rotation: -Cesium.Math.toRadians(pos.heading),
             alignedAxis: Cesium.Cartesian3.UNIT_Z,
+            scaleByDistance: new Cesium.NearFarScalar(500, 2.5, 1e5, 0.8),
           },
           label: {
-            text: `PENGUIN-${plan.direction === 'north' ? 'N' : 'S'}${plan.sortie}`,
-            font: 'bold 10px monospace',
+            text: `PENGUIN-${plan.direction === 'north' ? 'N' : 'S'}${plan.sortie} ${isScanning ? '📡 SCANNING' : isTransit ? '✈ TRANSIT' : '↩ RTB'}${pos.spotName ? '\n' + pos.spotName : ''}`,
+            font: 'bold 11px monospace',
             fillColor: new Cesium.Color(cr, cg, cb, 1),
             outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
+            outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            pixelOffset: new Cesium.Cartesian2(0, -16),
+            pixelOffset: new Cesium.Cartesian2(0, -22),
+            scaleByDistance: new Cesium.NearFarScalar(500, 1.5, 1e5, 0.5),
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5e5),
           },
         });
 
-        // VIDAR scan pyramid — 4 lines from drone to ground corners
-        const scanArea = getVidarScanArea(pos.lat, pos.lng, pos.heading, plan.scanWidthKm, 1.5);
+        // Altitude line — vertical line from drone down to surface
+        viewer.entities.add({
+          id: `drone-alt-${plan.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([pos.lng, pos.lat, pos.altitude, pos.lng, pos.lat, 5]),
+            width: 1,
+            material: new Cesium.Color(cr, cg, cb, 0.25),
+          },
+        });
+
+        // ── VIDAR scan pyramid — 4 lines from drone to ground corners ──
+        const scanArea = getVidarScanArea(pos.lat, pos.lng, pos.heading, plan.scanWidthKm, 2);
         for (let ci = 0; ci < 4; ci++) {
           viewer.entities.add({
             id: `drone-pyramid-${plan.id}-${ci}`,
@@ -1010,68 +1085,222 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
                 pos.lng, pos.lat, pos.altitude,
                 scanArea[ci][0], scanArea[ci][1], 10,
               ]),
-              width: 1,
-              material: new Cesium.Color(cr, cg, cb, pos.action === 'scanning' ? 0.4 : 0.15),
+              width: isScanning ? 1.5 : 0.5,
+              material: new Cesium.Color(cr, cg, cb, isScanning ? 0.5 : 0.1),
             },
           });
         }
 
-        // Scan footprint on ground (rectangle outline only — no fill to avoid white)
+        // ── VIDAR scan footprint on ocean — bright rectangle when scanning ──
         const footprintFlat: number[] = [];
         for (const [lng, lat] of scanArea) {
-          footprintFlat.push(lng, lat, 10);
+          footprintFlat.push(lng, lat, 8);
         }
         viewer.entities.add({
           id: `drone-footprint-${plan.id}`,
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArrayHeights(footprintFlat),
-            width: pos.action === 'scanning' ? 2 : 1,
-            material: new Cesium.Color(cr, cg, cb, pos.action === 'scanning' ? 0.6 : 0.2),
+            width: isScanning ? 4 : 1.5,
+            material: new Cesium.Color(cr, cg, cb, isScanning ? 0.9 : 0.2),
           },
         });
 
-        // Flight path trail at altitude
-        const trailPoints: number[] = [];
-        const trailSteps = 40;
-        const trailTimeStep = 2 * 60 * 1000;
-        for (let ts = trailSteps; ts >= 0; ts--) {
-          const trailT = droneTimeMs - ts * trailTimeStep;
-          const trailPos = getDronePosition(plan, trailT);
-          if (trailPos) trailPoints.push(trailPos.lng, trailPos.lat, trailPos.altitude);
-        }
-        if (trailPoints.length >= 6) {
+        // Scan center dot on surface — pulsing reference point
+        if (isScanning) {
           viewer.entities.add({
-            id: `drone-trail-${plan.id}`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights(trailPoints),
-              width: 1.5,
-              material: new Cesium.Color(cr, cg, cb, 0.3),
+            id: `drone-scandot-${plan.id}`,
+            position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 10),
+            point: {
+              pixelSize: 6,
+              color: new Cesium.Color(cr, cg, cb, 0.8),
+              outlineColor: Cesium.Color.WHITE,
+              outlineWidth: 1,
+              scaleByDistance: new Cesium.NearFarScalar(500, 2, 5e4, 0.5),
             },
           });
         }
 
-        // Scanned ground trail (center line on surface showing coverage)
-        const groundTrail: number[] = [];
-        for (let ts = trailSteps; ts >= 0; ts--) {
+        // ── Cross-hairs inside scan footprint when scanning ──
+        if (isScanning) {
+          // Horizontal line through center of scan area
+          const midTop = [(scanArea[1][0] + scanArea[2][0]) / 2, (scanArea[1][1] + scanArea[2][1]) / 2];
+          const midBot = [(scanArea[0][0] + scanArea[3][0]) / 2, (scanArea[0][1] + scanArea[3][1]) / 2];
+          viewer.entities.add({
+            id: `drone-crossh-${plan.id}-h`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights([midBot[0], midBot[1], 8, midTop[0], midTop[1], 8]),
+              width: 1, material: new Cesium.Color(cr, cg, cb, 0.4),
+            },
+          });
+          // Vertical line through center
+          const midL = [(scanArea[0][0] + scanArea[1][0]) / 2, (scanArea[0][1] + scanArea[1][1]) / 2];
+          const midR = [(scanArea[2][0] + scanArea[3][0]) / 2, (scanArea[2][1] + scanArea[3][1]) / 2];
+          viewer.entities.add({
+            id: `drone-crossh-${plan.id}-v`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights([midL[0], midL[1], 8, midR[0], midR[1], 8]),
+              width: 1, material: new Cesium.Color(cr, cg, cb, 0.4),
+            },
+          });
+        }
+
+        // ── Flight path trail at altitude (dissipating) ──
+        const trailSteps = 60;
+        const trailTimeStep = 1 * 60 * 1000; // 1 minute per step
+        // Recent trail — bright
+        const recentTrail: number[] = [];
+        for (let ts = 15; ts >= 0; ts--) {
           const trailT = droneTimeMs - ts * trailTimeStep;
           const trailPos = getDronePosition(plan, trailT);
-          if (trailPos) groundTrail.push(trailPos.lng, trailPos.lat, 5);
+          if (trailPos) recentTrail.push(trailPos.lng, trailPos.lat, trailPos.altitude);
         }
-        if (groundTrail.length >= 6) {
+        if (recentTrail.length >= 6) {
           viewer.entities.add({
-            id: `drone-ground-trail-${plan.id}`,
+            id: `drone-trail-${plan.id}-recent`,
             polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights(groundTrail),
-              width: 3,
-              material: new Cesium.Color(cr, cg, cb, 0.1),
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(recentTrail),
+              width: 2, material: new Cesium.Color(cr, cg, cb, 0.5),
+            },
+          });
+        }
+        // Older trail — faded
+        const oldTrail: number[] = [];
+        for (let ts = trailSteps; ts >= 14; ts--) {
+          const trailT = droneTimeMs - ts * trailTimeStep;
+          const trailPos = getDronePosition(plan, trailT);
+          if (trailPos) oldTrail.push(trailPos.lng, trailPos.lat, trailPos.altitude);
+        }
+        if (oldTrail.length >= 6) {
+          viewer.entities.add({
+            id: `drone-trail-${plan.id}-old`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(oldTrail),
+              width: 1, material: new Cesium.Color(cr, cg, cb, 0.12),
+            },
+          });
+        }
+
+        // ── Scanned swath — shows coverage area on ocean surface ──
+        // Continuous ground track showing everywhere VIDAR has scanned
+        // Uses a thick center line (like a paint roller trail)
+        const swathSteps = 180; // Look back 3 hours
+        const swathTimeStep = 30 * 1000; // Every 30 seconds for smooth trail
+        const swathCenterLine: number[] = [];
+        let lastSwathAction = '';
+        for (let ts = swathSteps; ts >= 0; ts--) {
+          const st = droneTimeMs - ts * swathTimeStep;
+          const sp = getDronePosition(plan, st);
+          if (!sp) continue;
+          if (sp.action === 'scanning') {
+            swathCenterLine.push(sp.lng, sp.lat, 6);
+            lastSwathAction = 'scanning';
+          } else if (lastSwathAction === 'scanning' && swathCenterLine.length >= 6) {
+            // Break in scanning — create a segment
+            viewer.entities.add({
+              id: `drone-swath-${plan.id}-seg-${ts}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights([...swathCenterLine]),
+                width: 12, // Wide to represent scan width
+                material: new Cesium.Color(cr, cg, cb, 0.12),
+              },
+            });
+            swathCenterLine.length = 0;
+            lastSwathAction = '';
+          }
+        }
+        // Final segment
+        if (swathCenterLine.length >= 6) {
+          viewer.entities.add({
+            id: `drone-swath-${plan.id}-final`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(swathCenterLine),
+              width: 14, // Wide to represent ~1km scan width
+              material: new Cesium.Color(cr, cg, cb, 0.15),
             },
           });
         }
       }
     }
 
-    } catch (e) {
-      console.log('[CesiumGlobe] Entity update error:', e);
+    // ── Satellite Imaging over Hotspots ──
+    // When satellites are enabled and hotspots exist, show imaging geometry
+    if (showSatellites && satData && hotspots.length > 0) {
+      for (const sat of satData.positions) {
+        const altMeters = sat.altitude * 1000;
+        // Check if satellite is near any hotspot (within swath width)
+        for (const hs of hotspots) {
+          const dLat = Math.abs(sat.lat - hs.lat);
+          const dLng = Math.abs(sat.lng - hs.lng);
+          const approxDistKm = Math.sqrt(dLat * dLat + dLng * dLng) * 111;
+          const swathHalfKm = sat.swathKm / 2;
+
+          if (approxDistKm < swathHalfKm + 10) {
+            // Satellite is imaging this hotspot!
+            const satHex = sat.color;
+            const sr = parseInt(satHex.slice(1, 3), 16) / 255;
+            const sg = parseInt(satHex.slice(3, 5), 16) / 255;
+            const sb = parseInt(satHex.slice(5, 7), 16) / 255;
+
+            // Imaging cone — 4 lines from satellite to ground swath corners
+            const halfSwathDeg = (sat.swathKm / 2) / 111;
+            const corners = [
+              [hs.lng - halfSwathDeg, hs.lat - halfSwathDeg],
+              [hs.lng + halfSwathDeg, hs.lat - halfSwathDeg],
+              [hs.lng + halfSwathDeg, hs.lat + halfSwathDeg],
+              [hs.lng - halfSwathDeg, hs.lat + halfSwathDeg],
+            ];
+
+            for (let ci = 0; ci < 4; ci++) {
+              viewer.entities.add({
+                id: `sat-img-cone-${sat.id}-${hs.id}-${ci}`,
+                polyline: {
+                  positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+                    sat.lng, sat.lat, altMeters,
+                    corners[ci][0], corners[ci][1], 20,
+                  ]),
+                  width: 1.5,
+                  material: new Cesium.Color(sr, sg, sb, 0.3),
+                },
+              });
+            }
+
+            // Ground swath outline
+            const swathOutline: number[] = [];
+            for (const [lng, lat] of [...corners, corners[0]]) {
+              swathOutline.push(lng, lat, 15);
+            }
+            viewer.entities.add({
+              id: `sat-img-swath-${sat.id}-${hs.id}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights(swathOutline),
+                width: 2,
+                material: new Cesium.Color(sr, sg, sb, 0.5),
+              },
+            });
+
+            // 📸 IMAGING label at ground
+            viewer.entities.add({
+              id: `sat-img-label-${sat.id}-${hs.id}`,
+              position: Cesium.Cartesian3.fromDegrees(hs.lng, hs.lat, 100),
+              label: {
+                text: `📸 ${sat.name} IMAGING\n${sat.resolution} · ${hs.boatCount} boats`,
+                font: 'bold 11px monospace',
+                fillColor: new Cesium.Color(sr, sg, sb, 1),
+                outlineColor: Cesium.Color.BLACK,
+                outlineWidth: 2,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                verticalOrigin: Cesium.VerticalOrigin.TOP,
+                pixelOffset: new Cesium.Cartesian2(0, 12),
+                distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5e5),
+              },
+            });
+          }
+        }
+      }
+    }
+
+    } catch (e: any) {
+      console.error('[CesiumGlobe] Entity update error:', e?.message || e, e?.stack?.split('\n')[1]);
     }
   }, [satData, vessels, satOrders, trajectories, trajIndex, loaded, showSatellites, showVessels, showSpots, showOrders, showTrajectories, showWaypoints, showHotspots, hotspots, selectedSpot, showDrones, droneTimeMs, droneFlightPlans]);
 
@@ -1296,7 +1525,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             { key: 'hotspots', label: 'AI Hotspots', state: showHotspots, set: setShowHotspots, color: '#ef4444', count: hotspots.length },
             { key: 'orders', label: 'Satellite Orders', state: showOrders, set: setShowOrders, color: '#a855f7', count: satOrders.length },
             { key: 'trajectories', label: '48h Replay', state: showTrajectories, set: setShowTrajectories, color: '#00d4ff' },
-            { key: 'drones', label: '🛩 Phase 2: VIDAR Drones', state: showDrones, set: setShowDrones, color: '#00d4ff' },
+            { key: 'drones', label: '🛩 Phase 2: VIDAR Drones', state: showDrones, set: (v: boolean) => { setShowDrones(v); if (v) { setShowSatellites(true); setShowHotspots(true); } }, color: '#00d4ff' },
           { key: 'satellites', label: 'Satellite Tracker', state: showSatellites, set: setShowSatellites, color: '#667788', count: satData?.positions.length },
           ].map(l => (
             <div key={l.key} onClick={() => l.set(!l.state)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer', opacity: l.state ? 1 : 0.35 }}>
