@@ -83,6 +83,7 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   // Layers
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [showWaypoints, setShowWaypoints] = useState(false); // Off by default — lots of points
   const [showSatellites, setShowSatellites] = useState(false); // Off by default to reduce clutter
   const [showVessels, setShowVessels] = useState(true);
@@ -279,6 +280,16 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       console.log('[CesiumGlobe] flyTo error:', e);
     }
   }, []);
+
+  // Listen for flyToSpot events from page-level buttons
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const spot = (e as CustomEvent).detail;
+      if (spot) flyToSpot(spot);
+    };
+    window.addEventListener('flyToSpot', handler);
+    return () => window.removeEventListener('flyToSpot', handler);
+  }, [flyToSpot]);
 
   // Reset view — back to San Diego offshore default
   const resetView = useCallback(() => {
@@ -1074,56 +1085,48 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
       </div>
 
       {/* ── Layer Panel (left side) ── */}
-      <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10, background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)', border: '1px solid #1e2a42', borderRadius: 10, padding: '12px 14px', fontSize: 11, maxWidth: 220 }}>
-        <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Fishing Intelligence</div>
+      <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 10, background: 'rgba(10,15,26,0.92)', backdropFilter: 'blur(8px)', border: '1px solid #1e2a42', borderRadius: 10, padding: layerPanelOpen ? '10px 14px' : '6px 10px', fontSize: 11, maxWidth: 220, transition: 'padding 0.2s' }}>
+        <div
+          onClick={() => setLayerPanelOpen(!layerPanelOpen)}
+          style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: layerPanelOpen ? 6 : 0 }}
+        >
+          <span>Fishing Intelligence</span>
+          <span style={{ color: '#667788', fontSize: 10 }}>{layerPanelOpen ? '▲' : '▼'}</span>
+        </div>
 
-        {[
-          { key: 'spots', label: 'Fishing Spots', state: showSpots, set: setShowSpots, color: '#f97316', count: FISHING_SPOTS.length },
-          { key: 'waypoints', label: 'Chart Waypoints', state: showWaypoints, set: setShowWaypoints, color: '#eab308', count: ALL_WAYPOINTS.length },
-          { key: 'vessels', label: 'Live Vessels', state: showVessels, set: setShowVessels, color: '#38bdf8', count: vessels.length },
-          { key: 'hotspots', label: 'AI Hotspots', state: showHotspots, set: setShowHotspots, color: '#ef4444', count: hotspots.length },
-          { key: 'orders', label: 'Satellite Orders', state: showOrders, set: setShowOrders, color: '#a855f7', count: satOrders.length },
-          { key: 'trajectories', label: '48h Replay', state: showTrajectories, set: setShowTrajectories, color: '#00d4ff' },
-          { key: 'satellites', label: 'Satellite Tracker', state: showSatellites, set: setShowSatellites, color: '#667788', count: satData?.positions.length },
-        ].map(l => (
-          <div key={l.key} onClick={() => l.set(!l.state)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', opacity: l.state ? 1 : 0.35 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: l.state ? l.color : '#333', border: `1px solid ${l.color}44`, flexShrink: 0 }} />
-            <span style={{ color: '#e2e8f0', flex: 1 }}>{l.label}</span>
-            {'count' in l && l.count != null && <span style={{ color: '#667788', fontSize: 9, fontFamily: 'monospace' }}>{l.count}</span>}
-          </div>
-        ))}
-
-        {/* Satellite orders indicator */}
-        {satOrders.length > 0 && showOrders && (
-          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #1e2a42' }}>
-            <div style={{ color: '#a855f7', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>
-              📡 {satOrders.length} Imagery Order{satOrders.length > 1 ? 's' : ''}
+        {layerPanelOpen && <>
+          {[
+            { key: 'spots', label: 'Fishing Spots', state: showSpots, set: setShowSpots, color: '#f97316', count: FISHING_SPOTS.length },
+            { key: 'waypoints', label: 'Chart Waypoints', state: showWaypoints, set: setShowWaypoints, color: '#eab308', count: ALL_WAYPOINTS.length },
+            { key: 'vessels', label: 'Live Vessels', state: showVessels, set: setShowVessels, color: '#38bdf8', count: vessels.length },
+            { key: 'hotspots', label: 'AI Hotspots', state: showHotspots, set: setShowHotspots, color: '#ef4444', count: hotspots.length },
+            { key: 'orders', label: 'Satellite Orders', state: showOrders, set: setShowOrders, color: '#a855f7', count: satOrders.length },
+            { key: 'trajectories', label: '48h Replay', state: showTrajectories, set: setShowTrajectories, color: '#00d4ff' },
+            { key: 'satellites', label: 'Satellite Tracker', state: showSatellites, set: setShowSatellites, color: '#667788', count: satData?.positions.length },
+          ].map(l => (
+            <div key={l.key} onClick={() => l.set(!l.state)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', cursor: 'pointer', opacity: l.state ? 1 : 0.35 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: l.state ? l.color : '#333', border: `1px solid ${l.color}44`, flexShrink: 0 }} />
+              <span style={{ color: '#cbd5e1', flex: 1, fontSize: 10 }}>{l.label}</span>
+              {'count' in l && l.count != null && <span style={{ color: '#667788', fontSize: 9, fontFamily: 'monospace' }}>{l.count}</span>}
             </div>
-            {satOrders.slice(0, 3).map(o => (
-              <div key={o.id} style={{ fontSize: 9, color: '#8899aa', marginBottom: 2 }}>
-                {o.provider || o.tier} · {o.resolution}m · {o.status}
+          ))}
+
+          {satOrders.length > 0 && showOrders && (
+            <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #1e2a42' }}>
+              <div style={{ color: '#a855f7', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>
+                📡 {satOrders.length} Imagery Order{satOrders.length > 1 ? 's' : ''}
               </div>
-            ))}
-          </div>
-        )}
+              {satOrders.slice(0, 3).map(o => (
+                <div key={o.id} style={{ fontSize: 9, color: '#8899aa', marginBottom: 2 }}>
+                  {o.provider || o.tier} · {o.resolution}m · {o.status}
+                </div>
+              ))}
+            </div>
+          )}
+        </>}
       </div>
 
-      {/* ── Fishing Spots Quick Access (bottom) ── */}
-      {showSpots && (
-        <div style={{ position: 'absolute', bottom: showTrajectories ? 110 : 50, left: 10, right: showTrajectories ? 10 : 'auto', zIndex: 10, display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: showTrajectories ? '100%' : 600 }}>
-          {FISHING_SPOTS.map(spot => (
-            <button key={spot.id} onClick={() => flyToSpot(spot)} style={{
-              padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
-              background: selectedSpot?.id === spot.id ? spot.color + '44' : 'rgba(10,15,26,0.85)',
-              color: selectedSpot?.id === spot.id ? '#fff' : '#8899aa',
-              border: `1px solid ${selectedSpot?.id === spot.id ? spot.color : '#1e2a42'}`,
-              cursor: 'pointer', whiteSpace: 'nowrap',
-            }}>
-              {spot.name}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Fishing spot buttons moved to below the map in the page layout */}
 
       {/* ── Time Scrubber (for trajectory replay) ── */}
       {showTrajectories && trajectories.length > 0 && (
