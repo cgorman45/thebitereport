@@ -471,18 +471,20 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
         const isSelected = selectedSpot?.id === spot.id;
 
-        // Ground-level geofence border — colored line clamped to ground
-        viewer.entities.add({
-          id: `geofence-${spot.id}`,
-          polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
-            width: isSelected ? 2.5 : isActive ? 2 : 1,
-            material: color.withAlpha(isSelected ? 0.6 : isActive ? 0.4 : 0.15),
-            clampToGround: true,
-          },
-        });
+        // Ground-level geofence border — ONLY show when selected or active
+        if (isSelected || isActive) {
+          viewer.entities.add({
+            id: `geofence-${spot.id}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
+              width: isSelected ? 2 : 1.5,
+              material: color.withAlpha(isSelected ? 0.5 : 0.3),
+              clampToGround: true,
+            },
+          });
+        }
 
-        // Flat ground fill — very subtle colored tint, NO extrusion
+        // Flat ground fill — only when selected or active
         if (isSelected || isActive) {
           const polyPositions = [];
           for (let pi = 0; pi < geofencePoints.length; pi += 2) {
@@ -500,25 +502,25 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           });
         }
 
-        // Boat count + radius label
-        viewer.entities.add({
-          id: `geofence-count-${spot.id}`,
-          position: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat + (spot.radiusKm / 111), 500),
-          label: {
-            text: isActive
-              ? `${boatsInside} boat${boatsInside > 1 ? 's' : ''} · ${spot.radiusKm}km`
-              : `${spot.radiusKm}km zone`,
-            font: isActive ? 'bold 11px sans-serif' : '10px sans-serif',
-            fillColor: isActive ? color : Cesium.Color.fromCssColorString('#667788'),
-            outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            pixelOffset: new Cesium.Cartesian2(0, -4),
-            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4e5),
-            scaleByDistance: new Cesium.NearFarScalar(1e3, 1, 3e5, 0.4),
-          },
-        });
+        // Boat count label — only when active with boats inside
+        if (isActive) {
+          viewer.entities.add({
+            id: `geofence-count-${spot.id}`,
+            position: Cesium.Cartesian3.fromDegrees(spot.lng, spot.lat + (spot.radiusKm / 111), 500),
+            label: {
+              text: `${boatsInside} boat${boatsInside > 1 ? 's' : ''}`,
+              font: 'bold 11px sans-serif',
+              fillColor: color,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              pixelOffset: new Cesium.Cartesian2(0, -4),
+              distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 4e5),
+              scaleByDistance: new Cesium.NearFarScalar(1e3, 1, 3e5, 0.4),
+            },
+          });
+        }
       }
     }
 
