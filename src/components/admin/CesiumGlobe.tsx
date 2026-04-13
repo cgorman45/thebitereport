@@ -6,7 +6,7 @@ import type { FishingSpot } from '@/lib/ocean-data/fishing-spots';
 import { ALL_WAYPOINTS } from '@/lib/ocean-data/baja-directions-waypoints';
 import { detectHotspots, generateReplayNarration } from '@/lib/ocean-data/replay-engine';
 import type { Hotspot } from '@/lib/ocean-data/replay-engine';
-import { generateAllFlightPlans, getDronePosition, getVidarScanArea } from '@/lib/ocean-data/drone-simulation';
+import { generateAllFlightPlans, getDronePosition, getVidarScanArea, getVidarFanPoints } from '@/lib/ocean-data/drone-simulation';
 import type { DroneFlightPlan } from '@/lib/ocean-data/drone-simulation';
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -1075,74 +1075,80 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           },
         });
 
-        // ── VIDAR scan pyramid — 4 lines from drone to ground corners ──
+        // ── VIDAR 180° sweep fan — wide triangle from drone to ocean ──
+        const fan = getVidarFanPoints(pos.lat, pos.lng, pos.altitude, pos.heading);
         const scanArea = getVidarScanArea(pos.lat, pos.lng, pos.heading, plan.scanWidthKm, 2);
-        for (let ci = 0; ci < 4; ci++) {
-          viewer.entities.add({
-            id: `drone-pyramid-${plan.id}-${ci}`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights([
-                pos.lng, pos.lat, pos.altitude,
-                scanArea[ci][0], scanArea[ci][1], 10,
-              ]),
-              width: isScanning ? 1.5 : 0.5,
-              material: new Cesium.Color(cr, cg, cb, isScanning ? 0.5 : 0.1),
-            },
-          });
-        }
+        const fanAlpha = isScanning ? 0.4 : 0.08;
 
-        // ── VIDAR scan footprint on ocean — bright rectangle when scanning ──
-        const footprintFlat: number[] = [];
-        for (const [lng, lat] of scanArea) {
-          footprintFlat.push(lng, lat, 8);
-        }
+        // Two main sweep lines: drone → left edge, drone → right edge
         viewer.entities.add({
-          id: `drone-footprint-${plan.id}`,
+          id: `drone-fan-L-${plan.id}`,
           polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArrayHeights(footprintFlat),
-            width: isScanning ? 4 : 1.5,
-            material: new Cesium.Color(cr, cg, cb, isScanning ? 0.9 : 0.2),
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+              pos.lng, pos.lat, pos.altitude,
+              fan.left[0], fan.left[1], 8,
+            ]),
+            width: isScanning ? 2 : 1,
+            material: new Cesium.Color(cr, cg, cb, fanAlpha),
+          },
+        });
+        viewer.entities.add({
+          id: `drone-fan-R-${plan.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+              pos.lng, pos.lat, pos.altitude,
+              fan.right[0], fan.right[1], 8,
+            ]),
+            width: isScanning ? 2 : 1,
+            material: new Cesium.Color(cr, cg, cb, fanAlpha),
           },
         });
 
-        // Scan center dot on surface — pulsing reference point
+        // Intermediate sweep lines (fill the fan with ~6 dashed rays)
         if (isScanning) {
+          for (let fi = 1; fi < fan.arcPoints.length - 1; fi += 2) {
+            viewer.entities.add({
+              id: `drone-fan-ray-${plan.id}-${fi}`,
+              polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+                  pos.lng, pos.lat, pos.altitude,
+                  fan.arcPoints[fi][0], fan.arcPoints[fi][1], 8,
+                ]),
+                width: 1,
+                material: new Cesium.Color(cr, cg, cb, 0.15),
+              },
+            });
+          }
+        }
+
+        // Arc on ocean surface showing the sweep width
+        const arcFlat: number[] = [];
+        for (const [aLng, aLat] of fan.arcPoints) {
+          arcFlat.push(aLng, aLat, 8);
+        }
+        if (arcFlat.length >= 6) {
           viewer.entities.add({
-            id: `drone-scandot-${plan.id}`,
-            position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 10),
-            point: {
-              pixelSize: 6,
-              color: new Cesium.Color(cr, cg, cb, 0.8),
-              outlineColor: Cesium.Color.WHITE,
-              outlineWidth: 1,
-              scaleByDistance: new Cesium.NearFarScalar(500, 2, 5e4, 0.5),
+            id: `drone-fan-arc-${plan.id}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(arcFlat),
+              width: isScanning ? 3 : 1,
+              material: new Cesium.Color(cr, cg, cb, isScanning ? 0.7 : 0.15),
             },
           });
         }
 
-        // ── Cross-hairs inside scan footprint when scanning ──
-        if (isScanning) {
-          // Horizontal line through center of scan area
-          const midTop = [(scanArea[1][0] + scanArea[2][0]) / 2, (scanArea[1][1] + scanArea[2][1]) / 2];
-          const midBot = [(scanArea[0][0] + scanArea[3][0]) / 2, (scanArea[0][1] + scanArea[3][1]) / 2];
-          viewer.entities.add({
-            id: `drone-crossh-${plan.id}-h`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights([midBot[0], midBot[1], 8, midTop[0], midTop[1], 8]),
-              width: 1, material: new Cesium.Color(cr, cg, cb, 0.4),
-            },
-          });
-          // Vertical line through center
-          const midL = [(scanArea[0][0] + scanArea[1][0]) / 2, (scanArea[0][1] + scanArea[1][1]) / 2];
-          const midR = [(scanArea[2][0] + scanArea[3][0]) / 2, (scanArea[2][1] + scanArea[3][1]) / 2];
-          viewer.entities.add({
-            id: `drone-crossh-${plan.id}-v`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights([midL[0], midL[1], 8, midR[0], midR[1], 8]),
-              width: 1, material: new Cesium.Color(cr, cg, cb, 0.4),
-            },
-          });
-        }
+        // Nadir point on surface directly below drone
+        viewer.entities.add({
+          id: `drone-nadir-${plan.id}`,
+          position: Cesium.Cartesian3.fromDegrees(pos.lng, pos.lat, 8),
+          point: {
+            pixelSize: isScanning ? 5 : 3,
+            color: new Cesium.Color(cr, cg, cb, isScanning ? 0.8 : 0.3),
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: isScanning ? 1 : 0,
+            scaleByDistance: new Cesium.NearFarScalar(500, 2, 5e4, 0.5),
+          },
+        });
 
         // ── Flight path trail at altitude (dissipating) ──
         const trailSteps = 60;

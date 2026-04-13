@@ -76,7 +76,7 @@ function generateFlightPlan(
   const flightDurationMs = 8 * 60 * 60 * 1000; // 8 hours
   const speedKmH = 100;
   const altitude = 457; // 1500ft in meters
-  const scanWidthKm = 1;
+  const scanWidthKm = 3; // VIDAR 180° sweep: ~1.5km each side at 1500ft
 
   const spots = getSpotsInRange(100, direction);
   const waypoints: DroneWaypoint[] = [];
@@ -243,10 +243,14 @@ export function generateAllFlightPlans(): DroneFlightPlan[] {
 }
 
 /**
- * Get VIDAR scan polygon (rectangle below drone).
+ * Get VIDAR scan area on ocean surface.
+ *
+ * VIDAR uses a 180° sweep perpendicular to flight path.
+ * At 1,500ft (457m), effective scan width is ~3km (1.5km each side).
+ * Returns 4 corners of the ground footprint + closing point.
  */
 export function getVidarScanArea(
-  lat: number, lng: number, heading: number, widthKm: number, lengthKm: number = 3,
+  lat: number, lng: number, heading: number, widthKm: number, lengthKm: number = 2,
 ): [number, number][] {
   const R = 6371;
   const headingRad = (heading * Math.PI) / 180;
@@ -270,4 +274,51 @@ export function getVidarScanArea(
 
   corners.push(corners[0]); // Close the polygon
   return corners;
+}
+
+/**
+ * Get VIDAR 180° sweep fan — array of points forming the fan arc on the ground.
+ * The VIDAR sweeps perpendicular to flight direction, 90° to each side.
+ */
+export function getVidarFanPoints(
+  lat: number, lng: number, altitude: number, heading: number,
+): { left: [number, number]; right: [number, number]; arcPoints: [number, number][] } {
+  const R = 6371;
+  // Effective ground range at 1500ft — VIDAR sees ~1.5km to each side
+  const groundRangeKm = Math.max(1, altitude * 0.003); // ~1.37km at 457m
+  const headingRad = (heading * Math.PI) / 180;
+
+  // Perpendicular directions
+  const leftRad = headingRad - Math.PI / 2;
+  const rightRad = headingRad + Math.PI / 2;
+
+  const offsetPt = (angleDeg: number, distKm: number): [number, number] => {
+    const rad = (angleDeg * Math.PI) / 180;
+    const dLat = (distKm * Math.cos(rad) / R) * (180 / Math.PI);
+    const dLng = (distKm * Math.sin(rad) / (R * Math.cos(lat * Math.PI / 180))) * (180 / Math.PI);
+    return [lng + dLng, lat + dLat];
+  };
+
+  const leftDeg = (leftRad * 180) / Math.PI;
+  const rightDeg = (rightRad * 180) / Math.PI;
+
+  const left = offsetPt(leftDeg, groundRangeKm);
+  const right = offsetPt(rightDeg, groundRangeKm);
+
+  // Arc points for the sweep fan (semicircle on the ground)
+  const arcPoints: [number, number][] = [];
+  const startAngle = leftDeg;
+  const endAngle = rightDeg;
+  const steps = 12;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    // Interpolate angle from left to right (going through front)
+    let angle = startAngle + t * (((endAngle - startAngle + 360) % 360) || 360);
+    if (Math.abs(endAngle - startAngle) < 180) {
+      angle = startAngle + t * (endAngle - startAngle);
+    }
+    arcPoints.push(offsetPt(angle, groundRangeKm));
+  }
+
+  return { left, right, arcPoints };
 }
