@@ -13,7 +13,7 @@ import type { DroneFlightPlan } from '@/lib/ocean-data/drone-simulation';
 interface SatPosition {
   id: string; name: string; provider: string; resolution: string;
   swathKm: number; color: string; lat: number; lng: number;
-  altitude: number; velocity: number;
+  altitude: number; velocity: number; type?: string; timestamp?: string;
 }
 
 interface OrbitPath {

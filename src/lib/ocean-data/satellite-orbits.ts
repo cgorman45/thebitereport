@@ -20,13 +20,15 @@
  *   - Aqua (NASA MODIS)
  */
 
-// TLE data from CelesTrak — updated periodically
-// These are real TLEs for the satellites we track
+import * as satelliteJs from 'satellite.js';
+
+// TLE data from Space-Track.org (USSPACECOM) — fetched 2026-04-13
+// Real operational TLEs for all tracked Earth observation satellites
 const SATELLITE_TLES: Record<string, { name: string; tle1: string; tle2: string; provider: string; resolution: string; swathKm: number; color: string; type: 'optical' | 'sar' | 'multispectral' }> = {
   'SENTINEL-2A': {
     name: 'Sentinel-2A',
-    tle1: '1 40697U 15028A   24100.50000000  .00000043  00000-0  15000-4 0  9993',
-    tle2: '2 40697  98.5693 160.0000 0001082  90.0000 270.0000 14.30818200479000',
+    tle1: '1 40697U 15028A   26103.31962760  .00000149  00000-0  73621-4 0  9995',
+    tle2: '2 40697  98.5635 179.1037 0001334  90.3570 269.7766 14.30820435564454',
     provider: 'ESA',
     resolution: '10m',
     swathKm: 290,
@@ -35,8 +37,8 @@ const SATELLITE_TLES: Record<string, { name: string; tle1: string; tle2: string;
   },
   'SENTINEL-2B': {
     name: 'Sentinel-2B',
-    tle1: '1 42063U 17013A   24100.50000000  .00000043  00000-0  15000-4 0  9994',
-    tle2: '2 42063  98.5693 160.0000 0001082  90.0000 270.0000 14.30818200350000',
+    tle1: '1 42063U 17013A   26103.31238177  .00000097  00000-0  53636-4 0  9994',
+    tle2: '2 42063  98.5661 179.0095 0001242  94.0245 266.1080 14.30820791475369',
     provider: 'ESA',
     resolution: '10m',
     swathKm: 290,
@@ -45,8 +47,8 @@ const SATELLITE_TLES: Record<string, { name: string; tle1: string; tle2: string;
   },
   'PLEIADES-1A': {
     name: 'Pléiades-1A',
-    tle1: '1 38012U 11076F   24100.50000000  .00000570  00000-0  26000-4 0  9991',
-    tle2: '2 38012  98.2000 320.0000 0001500  90.0000 270.0000 14.58000000640000',
+    tle1: '1 38012U 11076F   26103.30212009  .00000098  00000-0  30959-4 0  9995',
+    tle2: '2 38012  98.1995 179.2692 0001232  74.7360  14.4539 14.58569605762536',
     provider: 'Airbus',
     resolution: '50cm',
     swathKm: 20,
@@ -55,8 +57,8 @@ const SATELLITE_TLES: Record<string, { name: string; tle1: string; tle2: string;
   },
   'PLEIADES-1B': {
     name: 'Pléiades-1B',
-    tle1: '1 39019U 12068A   24100.50000000  .00000570  00000-0  26000-4 0  9992',
-    tle2: '2 39019  98.2000 320.0000 0001500  90.0000 270.0000 14.58000000550000',
+    tle1: '1 39019U 12068A   26103.31968126  .00000047  00000-0  19969-4 0  9996',
+    tle2: '2 39019  98.1965 179.2573 0001145  78.7513 281.3815 14.58556660711393',
     provider: 'Airbus',
     resolution: '50cm',
     swathKm: 20,
@@ -65,18 +67,28 @@ const SATELLITE_TLES: Record<string, { name: string; tle1: string; tle2: string;
   },
   'PLEIADES-NEO-3': {
     name: 'Pléiades Neo 3',
-    tle1: '1 48905U 21034A   24100.50000000  .00000570  00000-0  26000-4 0  9990',
-    tle2: '2 48905  98.2000 320.0000 0001500  90.0000 270.0000 14.58000000200000',
+    tle1: '1 48268U 21034A   26103.28691712 -.00000513  00000-0 -58555-4 0  9999',
+    tle2: '2 48268  97.8930 178.9850 0001214  93.4173 266.7179 14.81670491268048',
     provider: 'Airbus',
     resolution: '30cm',
     swathKm: 14,
     color: '#d946ef',
     type: 'optical',
   },
+  'PLEIADES-NEO-4': {
+    name: 'Pléiades Neo 4',
+    tle1: '1 49070U 21073E   26103.45575234 -.00000177  00000-0 -15901-4 0  9997',
+    tle2: '2 49070  97.8941 179.1478 0001146 101.1056 259.0286 14.81672939251788',
+    provider: 'Airbus',
+    resolution: '30cm',
+    swathKm: 14,
+    color: '#e879f9',
+    type: 'optical',
+  },
   'WORLDVIEW-3': {
     name: 'WorldView-3',
-    tle1: '1 40115U 14048A   24100.50000000  .00000570  00000-0  26000-4 0  9995',
-    tle2: '2 40115  97.9000 320.0000 0001500  90.0000 270.0000 14.85000000500000',
+    tle1: '1 40115U 14048A   26103.27765272  .00000548  00000-0  70680-4 0  9990',
+    tle2: '2 40115  97.8587 179.0048 0002350 129.9372 230.2049 14.84915076632274',
     provider: 'Maxar',
     resolution: '31cm',
     swathKm: 13,
@@ -85,32 +97,62 @@ const SATELLITE_TLES: Record<string, { name: string; tle1: string; tle2: string;
   },
   'SPOT-6': {
     name: 'SPOT 6',
-    tle1: '1 38755U 12047A   24100.50000000  .00000570  00000-0  26000-4 0  9996',
-    tle2: '2 38755  98.2000 320.0000 0001500  90.0000 270.0000 14.58000000600000',
+    tle1: '1 38755U 12047A   26103.30009036  .00000033  00000-0  17026-4 0  9991',
+    tle2: '2 38755  98.2160 171.3556 0001307  84.6756 275.4592 14.58587829723598',
     provider: 'Airbus',
     resolution: '1.5m',
     swathKm: 60,
     color: '#f97316',
     type: 'optical',
   },
-  'LANDSAT-9': {
-    name: 'Landsat 9',
-    tle1: '1 49260U 21088A   24100.50000000  .00000043  00000-0  15000-4 0  9997',
-    tle2: '2 49260  98.2200 160.0000 0001500  90.0000 270.0000 14.57000000180000',
+  'SPOT-7': {
+    name: 'SPOT 7',
+    tle1: '1 40053U 14034A   26103.32115929  .00000080  00000-0  25685-4 0  9996',
+    tle2: '2 40053  98.0681 167.4707 0001611  86.4686 273.6700 14.60901601627665',
+    provider: 'Airbus',
+    resolution: '1.5m',
+    swathKm: 60,
+    color: '#fb923c',
+    type: 'optical',
+  },
+  'LANDSAT-8': {
+    name: 'Landsat 8',
+    tle1: '1 39084U 13008A   26103.26963233  .00000218  00000-0  58296-4 0  9997',
+    tle2: '2 39084  98.1864 174.4169 0001173  93.4590 266.6743 14.57116978688449',
     provider: 'USGS',
     resolution: '30m',
     swathKm: 185,
     color: '#22c55e',
     type: 'multispectral',
   },
+  'LANDSAT-9': {
+    name: 'Landsat 9',
+    tle1: '1 49260U 21088A   26103.23544126  .00000210  00000-0  56599-4 0  9990',
+    tle2: '2 49260  98.1886 174.4532 0001117  99.5555 260.5770 14.57112635241545',
+    provider: 'USGS',
+    resolution: '30m',
+    swathKm: 185,
+    color: '#4ade80',
+    type: 'multispectral',
+  },
   'TERRA': {
     name: 'Terra (MODIS)',
-    tle1: '1 25994U 99068A   24100.50000000  .00000100  00000-0  30000-4 0  9998',
-    tle2: '2 25994  98.2100 100.0000 0001500  90.0000 270.0000 14.57000001300000',
+    tle1: '1 25994U 99068A   26103.22802308  .00000263  00000-0  62512-4 0  9999',
+    tle2: '2 25994  97.9523 155.3307 0003615  81.7033 318.5443 14.61051928400129',
     provider: 'NASA',
     resolution: '250m',
     swathKm: 2330,
     color: '#eab308',
+    type: 'multispectral',
+  },
+  'AQUA': {
+    name: 'Aqua (MODIS)',
+    tle1: '1 27424U 02022A   26103.25582291  .00000589  00000-0  12725-3 0  9993',
+    tle2: '2 27424  98.4228  71.2660 0001730 108.9713   2.3826 14.62056821273789',
+    provider: 'NASA',
+    resolution: '250m',
+    swathKm: 2330,
+    color: '#facc15',
     type: 'multispectral',
   },
 };
@@ -149,11 +191,8 @@ export interface ImageryFootprint {
  * Get current positions of all tracked satellites.
  */
 export function getCurrentPositions(date?: Date): SatellitePosition[] {
-  // Dynamic import satellite.js
-  let satellite: any;
-  try {
-    satellite = require('satellite.js');
-  } catch {
+  const satellite = satelliteJs;
+  if (!satellite?.twoline2satrec) {
     return getFallbackPositions(date || new Date());
   }
 
@@ -208,12 +247,8 @@ export function computeOrbitPath(
   stepMinutes: number = 1,
   startDate?: Date,
 ): OrbitPath | null {
-  let satellite: any;
-  try {
-    satellite = require('satellite.js');
-  } catch {
-    return null;
-  }
+  const satellite = satelliteJs;
+  if (!satellite?.twoline2satrec) return null;
 
   const sat = SATELLITE_TLES[satId];
   if (!sat) return null;
