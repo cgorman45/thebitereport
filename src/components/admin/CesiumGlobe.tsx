@@ -408,52 +408,33 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           }
         }
 
-        // Ground-level geofence border — very transparent, thin line
+        const isSelected = selectedSpot?.id === spot.id;
+
+        // Ground-level geofence border — colored line clamped to ground
         viewer.entities.add({
           id: `geofence-${spot.id}`,
           polyline: {
             positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
-            width: isActive ? 1.5 : 0.5,
-            material: color.withAlpha(isActive ? 0.25 : 0.06),
+            width: isSelected ? 2.5 : isActive ? 2 : 1,
+            material: color.withAlpha(isSelected ? 0.6 : isActive ? 0.4 : 0.15),
             clampToGround: true,
           },
         });
 
-        // 3D extruded transparent wall — always visible, brighter when selected/active
-        const isSelected = selectedSpot?.id === spot.id;
-        {
-          const wallHeight = isSelected ? 1500 : isActive ? 800 : 300;
-
-          // Use polygon with extrudedHeight for true 3D transparent volume
-          // Convert flat [lng, lat, lng, lat...] to hierarchy
+        // Flat ground fill — very subtle colored tint, NO extrusion
+        if (isSelected || isActive) {
           const polyPositions = [];
           for (let pi = 0; pi < geofencePoints.length; pi += 2) {
             polyPositions.push(Cesium.Cartesian3.fromDegrees(geofencePoints[pi], geofencePoints[pi + 1]));
           }
 
-          // Semi-transparent filled polygon on the surface
           viewer.entities.add({
             id: `geofence-fill-${spot.id}`,
             polygon: {
               hierarchy: new Cesium.PolygonHierarchy(polyPositions),
               height: 0,
-              extrudedHeight: wallHeight,
-              material: color.withAlpha(isSelected ? 0.06 : isActive ? 0.03 : 0.01),
+              material: color.withAlpha(isSelected ? 0.08 : 0.04),
               outline: false,
-            },
-          });
-
-          // Top cap outline at wall height
-          viewer.entities.add({
-            id: `geofence-top-${spot.id}`,
-            polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArrayHeights(
-                geofencePoints.flatMap((v: number, i: number) =>
-                  i % 2 === 0 ? [v] : [v, wallHeight]
-                )
-              ),
-              width: 1,
-              material: color.withAlpha(isSelected ? 0.25 : 0.08),
             },
           });
         }
