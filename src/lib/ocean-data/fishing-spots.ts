@@ -24,21 +24,23 @@ export const FISHING_SPOTS: FishingSpot[] = [
   {
     id: 'nine-mile-bank',
     name: 'Nine Mile Bank',
-    lat: 32.533, lng: -117.417,
+    lat: 32.608, lng: -117.390,
     zoom: 50000, radiusKm: 12,
     description: 'Long underwater ridge ~14mi from Mission Bay. Premier kelp paddy zone. Yellowtail, dorado, and tuna.',
     species: ['Yellowtail', 'Dorado', 'Yellowfin Tuna', 'Bluefin Tuna'],
     depth: '300-600ft',
     type: 'bank',
     color: '#ef4444',
-    // NW-SE elongated ridge, ~10 miles long, narrow
+    // From Google Earth KML trace
     polygon: [
-      [-117.50, 32.650], [-117.47, 32.660], [-117.42, 32.650],
-      [-117.38, 32.620], [-117.35, 32.580], [-117.33, 32.540],
-      [-117.32, 32.500], [-117.33, 32.470], [-117.35, 32.450],
-      [-117.38, 32.440], [-117.41, 32.450], [-117.44, 32.470],
-      [-117.46, 32.500], [-117.48, 32.540], [-117.50, 32.580],
-      [-117.51, 32.620], [-117.50, 32.650],
+      [-117.5172, 32.7190], [-117.5238, 32.6834], [-117.4942, 32.6399],
+      [-117.4812, 32.6237], [-117.4565, 32.5822], [-117.4379, 32.5566],
+      [-117.4107, 32.5309], [-117.3805, 32.5123], [-117.3547, 32.5084],
+      [-117.3351, 32.5228], [-117.3233, 32.5197], [-117.3092, 32.5269],
+      [-117.3198, 32.5542], [-117.3411, 32.5756], [-117.3719, 32.5934],
+      [-117.3894, 32.6046], [-117.4042, 32.6327], [-117.4161, 32.6451],
+      [-117.4248, 32.6729], [-117.4490, 32.6878], [-117.4556, 32.6693],
+      [-117.4718, 32.7163], [-117.4837, 32.7335], [-117.5172, 32.7190],
     ],
   },
   {
@@ -225,43 +227,52 @@ export const FISHING_SPOTS: FishingSpot[] = [
   },
   // ── Offshore banks / numbered spots (from chart contours) ──
   {
-    id: 'west-butterfly',
-    name: 'West Butterfly (162)',
-    // Chart: south of SCI, ~32°17'N, 118°28'W
-    lat: 32.280, lng: -118.470,
-    zoom: 45000, radiusKm: 8,
-    description: 'Western butterfly bank south of San Clemente Island. Deep structure holding yellowtail and tuna.',
-    species: ['Yellowtail', 'Yellowfin Tuna', 'Dorado'],
-    depth: '400-1200ft',
+    id: 'east-west-butterfly',
+    name: 'East & West Butterfly',
+    // Combined butterfly complex — from Google Earth KML trace
+    lat: 32.307, lng: -118.199,
+    zoom: 80000, radiusKm: 20,
+    description: 'Combined butterfly bank complex south of San Clemente Island. East (267) and West (162) butterfly structures with Blake Knolls between them.',
+    species: ['Yellowfin Tuna', 'Yellowtail', 'Dorado', 'Wahoo'],
+    depth: '300-1200ft',
     type: 'bank',
     color: '#22c55e',
-    // Butterfly-wing contour — south of SCI
+    // From Google Earth KML trace — 39-point polygon
     polygon: [
-      [-118.53, 32.320], [-118.49, 32.330], [-118.45, 32.320],
-      [-118.42, 32.305], [-118.40, 32.285], [-118.39, 32.265],
-      [-118.40, 32.245], [-118.42, 32.230], [-118.46, 32.225],
-      [-118.50, 32.230], [-118.53, 32.245], [-118.55, 32.265],
-      [-118.55, 32.290], [-118.53, 32.320],
+      [-118.1784, 32.3456], [-118.1771, 32.3750], [-118.2131, 32.3998],
+      [-118.2527, 32.4105], [-118.3103, 32.3925], [-118.3775, 32.3704],
+      [-118.4050, 32.3815], [-118.4807, 32.3946], [-118.5650, 32.3724],
+      [-118.5862, 32.3447], [-118.5662, 32.3214], [-118.4869, 32.3065],
+      [-118.4123, 32.3079], [-118.3650, 32.3155], [-118.3396, 32.2968],
+      [-118.2982, 32.2531], [-118.2792, 32.2239], [-118.2625, 32.1680],
+      [-118.2358, 32.1459], [-118.1990, 32.1350], [-118.1721, 32.1652],
+      [-118.1593, 32.1927], [-118.1417, 32.2141], [-118.1050, 32.1834],
+      [-118.0706, 32.1701], [-118.0310, 32.1653], [-117.9876, 32.1812],
+      [-117.9550, 32.1967], [-117.9573, 32.2268], [-117.9782, 32.2450],
+      [-117.9740, 32.2792], [-117.9380, 32.3255], [-117.9870, 32.3791],
+      [-117.9927, 32.4481], [-118.0271, 32.4474], [-118.0601, 32.4078],
+      [-118.0851, 32.3691], [-118.1574, 32.3413], [-118.1784, 32.3456],
     ],
   },
   {
-    id: 'east-butterfly',
-    name: 'East Butterfly (267)',
-    // Exact: 32°18'23.9"N 118°04'04.7"W
-    lat: 32.306639, lng: -118.067972,
-    zoom: 45000, radiusKm: 10,
-    description: 'Eastern butterfly bank. Larger structure near Blake Knolls and San Salvador Knoll.',
-    species: ['Yellowfin Tuna', 'Yellowtail', 'Dorado', 'Wahoo'],
-    depth: '300-1000ft',
-    type: 'bank',
-    color: '#22c55e',
-    // Wider butterfly-wing contour — near San Salvador Knoll
+    id: 'the-ridge',
+    name: 'The Ridge',
+    // From Google Earth KML trace — line feature running NW-SE
+    lat: 32.720, lng: -117.723,
+    zoom: 60000, radiusKm: 6,
+    description: 'Underwater ridge running NW-SE from near La Jolla canyon toward Nine Mile Bank. Holds yellowtail and calico bass.',
+    species: ['Yellowtail', 'Calico Bass', 'White Seabass', 'Bonito'],
+    depth: '200-800ft',
+    type: 'reef',
+    color: '#00d4ff',
+    // Line feature — create a narrow polygon by buffering the polyline
     polygon: [
-      [-118.08, 32.300], [-118.03, 32.310], [-117.97, 32.300],
-      [-117.93, 32.280], [-117.90, 32.260], [-117.89, 32.235],
-      [-117.90, 32.210], [-117.93, 32.190], [-117.97, 32.180],
-      [-118.02, 32.180], [-118.06, 32.190], [-118.09, 32.210],
-      [-118.10, 32.240], [-118.10, 32.270], [-118.08, 32.300],
+      // East side of ridge (offset ~1km east)
+      [-117.8187, 32.8637], [-117.7343, 32.7783], [-117.7002, 32.7255],
+      [-117.6628, 32.6593], [-117.6477, 32.5975],
+      // West side of ridge (offset ~1km west)
+      [-117.6677, 32.5876], [-117.6828, 32.6493], [-117.7202, 32.7155],
+      [-117.7543, 32.7683], [-117.8387, 32.8537], [-117.8187, 32.8637],
     ],
   },
   {
