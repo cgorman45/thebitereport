@@ -123,6 +123,16 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
         skyAtmosphere: new Cesium.SkyAtmosphere(),
       });
 
+      // Cesium World Bathymetry terrain — shows underwater ridges and valleys
+      try {
+        Cesium.CesiumTerrainProvider.fromIonAssetId(2426648).then((bathyTerrain: any) => {
+          viewer.terrainProvider = bathyTerrain;
+          viewer.scene.globe.enableLighting = true;
+        }).catch(() => {
+          console.log('[Cesium] Bathymetry terrain not available');
+        });
+      } catch { /* ignore */ }
+
       // Google 3D tiles
       if (cesiumIonToken) {
         try {
@@ -145,6 +155,11 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
       viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#050a15');
       viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a1628');
+      viewer.scene.globe.depthTestAgainstTerrain = true;
+      // Make ocean translucent so underwater bathymetry is visible
+      viewer.scene.globe.translucency.enabled = true;
+      viewer.scene.globe.translucency.frontFaceAlphaByDistance = new Cesium.NearFarScalar(1000, 0.3, 100000, 0.6);
+      viewer.scene.globe.undergroundColor = Cesium.Color.fromCssColorString('#0a1628');
       viewer.scene.screenSpaceCameraController.enableZoom = true;
       viewer.scene.screenSpaceCameraController.enableRotate = true;
       viewer.scene.screenSpaceCameraController.enableTilt = true;
