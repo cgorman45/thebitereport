@@ -102,6 +102,8 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
   const droneTimeMsRef = useRef(5 * 60 * 60 * 1000); // Ref for animation loop (avoids re-render)
   // dronePlaying removed — drones sync to main trajectory timeline
   const [showSatellites, setShowSatellites] = useState(false);
+  const [godsEyeView, setGodsEyeView] = useState(false);
+  const defaultFov = useRef(60); // Store original FOV
   const [showVessels, setShowVessels] = useState(true);
   const [showSpots, setShowSpots] = useState(true);
   const [showOrders, setShowOrders] = useState(true);
@@ -126,6 +128,55 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, []);
+
+  // God's Eye orbital view toggle — wide FOV, high altitude, shows Earth curvature + satellites
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    const Cesium = (window as any).Cesium;
+    if (!viewer || !Cesium) return;
+
+    if (godsEyeView) {
+      // Save current FOV
+      defaultFov.current = Cesium.Math.toDegrees(viewer.camera.frustum.fov);
+
+      // Wide FOV for fish-eye effect (85° instead of default ~60°)
+      viewer.camera.frustum.fov = Cesium.Math.toRadians(85);
+
+      // Enable stars and atmosphere
+      viewer.scene.skyBox.show = true;
+      if (viewer.scene.sun) viewer.scene.sun.show = true;
+      if (viewer.scene.moon) viewer.scene.moon.show = true;
+
+      // Enable satellites and hotspots
+      setShowSatellites(true);
+      setShowHotspots(true);
+
+      // Fly to orbital altitude — centered on SoCal fishing grounds
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(-118.0, 32.5, 2500000), // 2500km altitude
+        orientation: {
+          heading: Cesium.Math.toRadians(340),
+          pitch: Cesium.Math.toRadians(-70),
+          roll: 0,
+        },
+        duration: 3,
+      });
+    } else {
+      // Restore normal FOV
+      viewer.camera.frustum.fov = Cesium.Math.toRadians(defaultFov.current || 60);
+
+      // Fly back to default view
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(-118.2, 32.7, 200000),
+        orientation: {
+          heading: Cesium.Math.toRadians(240),
+          pitch: Cesium.Math.toRadians(-25),
+          roll: 0,
+        },
+        duration: 2,
+      });
+    }
+  }, [godsEyeView]);
 
   // Initialize CesiumJS
   useEffect(() => {
@@ -1623,9 +1674,26 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
           3D
         </button>
 
+        {/* God's Eye orbital view toggle */}
+        <button
+          onClick={() => setGodsEyeView(!godsEyeView)}
+          style={{
+            width: 40, height: 28, borderRadius: 6,
+            background: godsEyeView ? 'rgba(0,212,255,0.25)' : 'rgba(30,35,50,0.85)',
+            backdropFilter: 'blur(8px)',
+            border: godsEyeView ? '1px solid #00d4ff' : '1px solid rgba(255,255,255,0.12)',
+            color: godsEyeView ? '#00d4ff' : '#8899aa', fontSize: 9, fontWeight: 800,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)', letterSpacing: 0.5,
+          }}
+          title="God's Eye orbital view — wide FOV showing satellites and Earth curvature"
+        >
+          🛰
+        </button>
+
         {/* Center / Home */}
         <button
-          onClick={resetView}
+          onClick={() => { if (godsEyeView) setGodsEyeView(false); else resetView(); }}
           style={{
             width: 40, height: 40, borderRadius: '50%',
             background: 'rgba(30,35,50,0.85)', backdropFilter: 'blur(8px)',
