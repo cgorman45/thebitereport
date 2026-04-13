@@ -471,21 +471,24 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
 
         const isSelected = selectedSpot?.id === spot.id;
 
-        // Ground-level geofence border — ONLY show when selected or active
+        // Ground-level geofence — ONLY show when selected or active
         if (isSelected || isActive) {
+          // Polyline border elevated above 3D tiles
+          const borderPositions = [];
+          for (let pi = 0; pi < geofencePoints.length; pi += 2) {
+            borderPositions.push(geofencePoints[pi], geofencePoints[pi + 1], 200);
+          }
+
           viewer.entities.add({
             id: `geofence-${spot.id}`,
             polyline: {
-              positions: Cesium.Cartesian3.fromDegreesArray(geofencePoints),
-              width: isSelected ? 2 : 1.5,
-              material: color.withAlpha(isSelected ? 0.5 : 0.3),
-              clampToGround: true,
+              positions: Cesium.Cartesian3.fromDegreesArrayHeights(borderPositions),
+              width: isSelected ? 3 : 2,
+              material: color.withAlpha(isSelected ? 0.8 : 0.5),
             },
           });
-        }
 
-        // Flat ground fill — only when selected or active
-        if (isSelected || isActive) {
+          // Fill polygon elevated above 3D tiles
           const polyPositions = [];
           for (let pi = 0; pi < geofencePoints.length; pi += 2) {
             polyPositions.push(Cesium.Cartesian3.fromDegrees(geofencePoints[pi], geofencePoints[pi + 1]));
@@ -495,9 +498,10 @@ export default function CesiumGlobe({ cesiumIonToken }: CesiumGlobeProps) {
             id: `geofence-fill-${spot.id}`,
             polygon: {
               hierarchy: new Cesium.PolygonHierarchy(polyPositions),
-              height: 0,
+              height: 150,
               material: color.withAlpha(isSelected ? 0.08 : 0.04),
-              outline: false,
+              outline: true,
+              outlineColor: color.withAlpha(0.3),
             },
           });
         }
